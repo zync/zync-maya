@@ -1,0 +1,19 @@
+#
+#   For single OS users.
+#
+API_DIR = 'Z:/plugins/zync-python'
+
+#
+#   For multiple OS users. Detects user's operating system and 
+#   sets path to zync-python folder accordingly.  
+#
+#import platform
+#if platform.system() in ('Windows', 'Microsoft'):
+#    API_DIR = 'Z:/plugins/zync-python'
+#else:
+#    API_DIR = '/Volumes/server/plugins/zync-python'
+
+#
+#   API_KEY - Check your My Account page to get your key.
+#
+API_KEY = '5c752c493034342d6b6832677e5d707c'
