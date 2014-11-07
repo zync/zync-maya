@@ -867,9 +867,9 @@ class SubmitWindow(object):
   def init_existing_project_name(self):
     self.projects = zync_conn.get_project_list()
     project_found = False
-    for project_name in self.projects:
-      cmds.menuItem(parent='existing_project_name', label=project_name)
-      if project_name == self.new_project_name:
+    for project in self.projects:
+      cmds.menuItem(parent='existing_project_name', label=project['name'])
+      if project['name'] == self.new_project_name:
         project_found = True
     if project_found:
       cmds.optionMenu('existing_project_name', e=True, v=self.new_project_name)
