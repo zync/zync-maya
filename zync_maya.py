@@ -784,10 +784,6 @@ class SubmitWindow(object):
 
     if params['upload_only'] == 0 and params['renderer'] == 'vray':
       params['vray_nightly'] = int(eval_ui('vray_nightly', 'checkBox', v=True))
-      if params['vray_nightly'] == 1:
-        vray_version = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
-        if vray_version.startswith('3.0'):
-          cmds.error('Nightly Builds are not currently supported for Vray 3.0.')
       params['use_vrscene'] = int(eval_ui('use_standalone', 'checkBox', v=True))
       if params['use_vrscene'] == 1 and params['job_subtype'] == 'bake':
         cmds.error('Vray Standalone is not currently supported for Bake jobs.')
