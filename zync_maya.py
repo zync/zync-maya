@@ -450,7 +450,7 @@ class SubmitWindow(object):
     self.frame_step = cmds.getAttr('defaultRenderGlobals.byFrameStep')
     self.chunk_size = 10
     self.upload_only = 0
-    self.start_new_slots = 0
+    self.start_new_slots = 1
     self.skip_check = 0
     self.notify_complete = 0
     self.vray_nightly = 0
@@ -531,7 +531,7 @@ class SubmitWindow(object):
     if checked:
       cmds.textField('num_instances', e=True, en=False)
       cmds.optionMenu('instance_type', e=True, en=False)
-      cmds.checkBox('start_new_slots', e=True, en=False)
+      #cmds.checkBox('start_new_slots', e=True, en=False)
       cmds.checkBox('skip_check', e=True, en=False)
       cmds.checkBox('distributed', e=True, en=False)
       cmds.textField('output_dir', e=True, en=False)
@@ -549,7 +549,7 @@ class SubmitWindow(object):
     else:
       cmds.textField('num_instances', e=True, en=True)
       cmds.optionMenu('instance_type', e=True, en=True)
-      cmds.checkBox('start_new_slots', e=True, en=True)
+      #cmds.checkBox('start_new_slots', e=True, en=True)
       cmds.checkBox('skip_check', e=True, en=True)
       cmds.textField('output_dir', e=True, en=True)
       cmds.optionMenu('renderer', e=True, en=True)
@@ -621,14 +621,20 @@ class SubmitWindow(object):
     if old_types != None:
       cmds.deleteUI(old_types)
     first_type = None
+    visible = False
     if renderer_key != None and renderer_key in self.job_types:
       for job_type in self.job_types[renderer_key]:
         if first_type == None:
           first_type = job_type
-        print cmds.menuItem(parent='job_type', label=string.capwords(job_type))
+        label = string.capwords(job_type)
+        if label != 'Render':
+          visible = True
+        print cmds.menuItem(parent='job_type', label=label)
     else:
       print cmds.menuItem(parent='job_type', label='Render')
       first_type = 'Render'
+    cmds.optionMenu('job_type', e=True, vis=visible) 
+    cmds.text('job_type_label', e=True, vis=visible) 
     self.change_job_type(first_type)
 
   def change_job_type(self, job_type):
@@ -747,9 +753,11 @@ class SubmitWindow(object):
     if parent != None and parent != '':
       params['parent_id'] = parent
     params['upload_only'] = int(eval_ui('upload_only', 'checkBox', v=True))
-    params['start_new_slots'] = int(not eval_ui('start_new_slots', 'checkBox', v=True))
+    #params['start_new_slots'] = int(not eval_ui('start_new_slots', 'checkBox', v=True))
+    params['start_new_slots'] = self.start_new_slots
     params['skip_check'] = int(eval_ui('skip_check', 'checkBox', v=True))
-    params['notify_complete'] = int(eval_ui('notify_complete', 'checkBox', v=True))
+    #params['notify_complete'] = int(eval_ui('notify_complete', 'checkBox', v=True))
+    params['notify_complete'] = self.notify_complete 
     params['project'] = eval_ui('project', text=True)
     params['out_path'] = eval_ui('output_dir', text=True)
     params['ignore_plugin_errors'] = int(eval_ui('ignore_plugin_errors', 'checkBox', v=True))
