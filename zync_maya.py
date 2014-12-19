@@ -767,8 +767,6 @@ class SubmitWindow(object):
       if zync_conn.MAYA_RENDERERS[k] == render:
         params['renderer'] = k
         break
-    else:
-      params['renderer'] = zync.MAYA_DEFAULT_RENDERER
 
     params['job_subtype'] = eval_ui('job_type', type='optionMenu', v=True).lower()
 
@@ -780,8 +778,6 @@ class SubmitWindow(object):
       if selected_type.split(' ')[0] == inst_type:
         params['instance_type'] = inst_type
         break
-    else:
-      params['instance_type'] = zync.DEFAULT_INSTANCE_TYPE
 
     params['frange'] = eval_ui('frange', text=True)
     params['step'] = int(eval_ui('frame_step', text=True))
@@ -883,14 +879,11 @@ class SubmitWindow(object):
       cmds.radioButton('existing_project', e=True, en=True)
 
   def init_instance_type(self):
-    non_default = []
-    for inst_type in zync_conn.INSTANCE_TYPES:
-      if inst_type == zync_conn.DEFAULT_INSTANCE_TYPE:
-        cmds.menuItem(parent='instance_type', label='%s (%s)' % (inst_type, zync_conn.INSTANCE_TYPES[inst_type]["description"]))
-      else:
-        non_default.append('%s (%s)' % (inst_type, zync_conn.INSTANCE_TYPES[inst_type]["description"])) 
-    for label in non_default:
-      cmds.menuItem(parent='instance_type', label=label)
+    sorted_types = [t for t in zync_conn.INSTANCE_TYPES]
+    sorted_types.sort(zync_conn.compare_instance_types)
+    for inst_type in sorted_types:
+      cmds.menuItem(parent='instance_type', label='%s (%s)' % (inst_type, 
+        zync_conn.INSTANCE_TYPES[inst_type]['description']))
 
   def init_renderer(self):
     #
