@@ -1,14 +1,12 @@
 """
-Zync Submit
+Zync Maya Plugin
 
-This module provides a Maya + Python implementation of the web-based Zync
-Job Submit GUI. There are a few advantages to doing render submissions to Zync
-from within Maya:
+This Maya plugin implements the Zync Python API to provide an interface
+for launching Maya jobs on Zync.
 
-  * Extensive preflight checking possible.
-  * Less context switching between the browser and Maya.
+Depends on the zync-python Python API:
 
-Depends on the zync-python Python API.
+https://github.com/zync/zync-python
 
 Usage:
   import zync_maya
@@ -45,13 +43,6 @@ UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
 import maya.cmds as cmds
 import maya.mel
-
-#def label_ui(label, ui, *args, **kwargs):
-#  """
-#  Helper function that creates an UI element with a text label next to it.
-#  """
-#  cmds.text(label=label)
-#  return getattr(cmds, ui)(*args, **kwargs)
 
 def eval_ui(path, type='textField', **kwargs):
   """
