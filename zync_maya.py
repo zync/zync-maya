@@ -410,7 +410,11 @@ class SubmitWindow(object):
 
     scene_name = cmds.file(q=True, loc=True)
     if scene_name == 'unknown':
-      cmds.error('Please save your script before launching a job.') 
+      err_msg = 'Please save your script before launching a job.'
+      cmds.confirmDialog(title='Unsaved script',
+        message=err_msg,
+        button='OK', defaultButton='OK', icon='critical')
+      cmds.error(err_msg)
 
     self.new_project_name = zync_conn.get_project_name(scene_name)
 
@@ -735,7 +739,11 @@ class SubmitWindow(object):
     if cmds.radioButton('existing_project', q=True, sl=True) == True:
       proj_name = eval_ui('existing_project_name', 'optionMenu', v=True)
       if proj_name == None or proj_name.strip() == '':
-        cmds.error('Your project name cannot be blank. Please select New Project and enter a name.')
+        err_msg = 'Your project name cannot be blank. Please select New Project and enter a name.'
+        cmds.confirmDialog(title='No project',
+          message=err_msg,
+          button='OK', defaultButton='OK', icon='critical')
+        cmds.error(err_msg)
     else:
       proj_name = eval_ui('new_project_name', text=True)
     params['proj_name'] = proj_name
@@ -1143,6 +1151,11 @@ class SubmitWindow(object):
     except zync.ZyncPreflightError as e:
       cmds.confirmDialog(title='Preflight Check Failed', message=str(e),
         button='OK', defaultButton='OK')
+
+    except zync.ZyncError as e:
+      cmds.confirmDialog(title='Submission Error',
+        message='Error submitting job: %s' % (str(e),),
+        button='OK', defaultButton='OK', icon='critical')
 
 def submit_dialog():
   submit_window = SubmitWindow()
