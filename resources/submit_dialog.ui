@@ -465,7 +465,7 @@
              </font>
             </property>
             <property name="text">
-             <string>Num. Slots:</string>
+             <string>Num. Machines:</string>
             </property>
             <property name="textFormat">
              <enum>Qt::AutoText</enum>
