@@ -14,6 +14,7 @@ Usage:
 
 """
 
+import copy
 import hashlib
 import math
 import os
@@ -1081,6 +1082,8 @@ class SubmitWindow(object):
       except:
         raise Exception('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
 
+    #original_scene_name = os.path.basename(cmds.file(q=True, loc=True))
+
     scene_info = {'files': files,
             'render_layers': self.layers,
             'render_passes': render_passes,
@@ -1115,17 +1118,6 @@ class SubmitWindow(object):
     Submits to zync
     """
     scene_path = cmds.file(q=True, loc=True)
-    # Comment out the line above and uncomment this section if you want to
-    # save a unique copy of the scene file each time your submit a job.
-    '''
-    original_path = cmds.file(q=True, loc=True)
-    original_modified = cmds.file(q=True, modified=True)
-    scene_path = generate_scene_path()
-    cmds.file(rename=scene_path)
-    cmds.file(save=True, type='mayaAscii')
-    cmds.file(rename=original_path)
-    cmds.file(modified=original_modified)
-    '''
 
     params = window.get_render_params()
 
@@ -1144,9 +1136,130 @@ class SubmitWindow(object):
       raise MayaZyncException('Zync username authentication failed.')
 
     try:
-      zync_conn.submit_job('maya', scene_path, params=params)
-      cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
-        button='OK', defaultButton='OK')
+      if params['renderer'] == 'vray':
+        cmds.undoInfo(openChunk=True)
+
+        scene_head, extension = os.path.splitext(scene_path)
+        scene_name = os.path.basename(scene_head)
+        vrscene_path = '%s.vrscene' % (scene_head,)
+        vrscene_path_job = zync_conn.generate_file_path(vrscene_path)  
+
+        layer_list = params['layers'].split(',')
+        for layer in layer_list:  
+          cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+
+          layer_params = copy.deepcopy(params)
+
+          layer_params['output_dir'] = params['out_path']
+
+          tail = cmds.getAttr('vraySettings.fileNamePrefix')  
+          tail = tail.replace('%s', scene_name)
+          tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
+          clean_camera = params['camera'].replace(':', '_')
+          tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
+            flags=re.IGNORECASE)
+          tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+          if tail[-1] != '.':
+            tail += '.'
+
+          layer_params['output_filename'] = '%s.%s' % (
+            tail, params['scene_info']['extension'])
+
+          cmds.setAttr('vraySettings.vrscene_render_on', 0)
+
+          cmds.setAttr('vraySettings.vrscene_on', 1)
+
+          cmds.setAttr('vraySettings.vrscene_filename', vrscene_path_job, type='string')
+
+          cmds.setAttr('vraySettings.misc_separateFiles', 0)
+
+          cmds.setAttr('vraySettings.misc_eachFrameInFile', 0)
+
+          cmds.setAttr('vraySettings.misc_meshAsHex', 1)
+          cmds.setAttr('vraySettings.misc_transformAsHex', 1)
+          cmds.setAttr('vraySettings.misc_compressedVrscene', 1)
+
+          cmds.setAttr('vraySettings.vfbOn', 0)
+
+          cmds.setAttr('vraySettings.animBatchOnly', 0)
+
+          maya.mel.eval('vrend')
+
+          vrscene_base, ext = os.path.splitext(vrscene_path_job)
+          layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
+          zync_conn.submit_job('vray', layer_file, params=layer_params)
+
+        cmds.undoInfo(closeChunk=True)
+        cmds.undo()
+
+        cmds.confirmDialog(title='Success', 
+          message='{num_jobs} {label} submitted to Zync.'.format(
+            num_jobs=len(layer_list),
+            label='job' if len(layer_list) == 1 else 'jobs'), 
+          button='OK', defaultButton='OK')
+
+      elif params['renderer'] == 'arnold':
+        cmds.undoInfo(openChunk=True)
+
+        scene_head, extension = os.path.splitext(scene_path)
+        scene_name = os.path.basename(scene_head)
+        ass_path = '%s.ass' % (scene_head,)
+        ass_path_job = zync_conn.generate_file_path(ass_path)  
+
+        layer_list = params['layers'].split(',')
+        for layer in layer_list:  
+          cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+
+          layer_params = copy.deepcopy(params)
+
+          #layer_params['output_dir'] = params['out_path']
+
+          #tail = cmds.getAttr('vraySettings.fileNamePrefix')  
+          #tail = tail.replace('%s', scene_name)
+          #tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
+          #clean_camera = params['camera'].replace(':', '_')
+          #tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
+          #  flags=re.IGNORECASE)
+          #tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+          #if tail[-1] != '.':
+          #  tail += '.'
+
+          #layer_params['output_filename'] = '%s.%s' % (
+          #  tail, params['scene_info']['extension'])
+
+          sf, ef = params['frange'].split('-')
+
+          ass_base, ext = os.path.splitext(ass_path_job)
+          layer_file = '%s_%s%s' % (ass_base, layer, ext)
+
+          ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, ef) +
+            '-lightLinks 1 -frameStep 1.0 -startFrame %s ' % (sf,) +
+            '-shadowLinks 1 -cam %s' % (params['camera'],))
+          print ass_cmd
+          maya.mel.eval(ass_cmd)
+
+          #vrscene_base, ext = os.path.splitext(vrscene_path_job)
+          #layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
+          #zync_conn.submit_job('vray', layer_file, params=layer_params)
+
+        cmds.undoInfo(closeChunk=True)
+        cmds.undo()
+
+      else:
+        # Uncomment this section if you want to
+        # save a unique copy of the scene file each time your submit a job.
+        '''
+        original_path = cmds.file(q=True, loc=True)
+        original_modified = cmds.file(q=True, modified=True)
+        scene_path = generate_scene_path()
+        cmds.file(rename=scene_path)
+        cmds.file(save=True, type='mayaAscii')
+        cmds.file(rename=original_path)
+        cmds.file(modified=original_modified)
+        '''
+        zync_conn.submit_job('maya', scene_path, params=params)
+        cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
+          button='OK', defaultButton='OK')
 
     except zync.ZyncPreflightError as e:
       cmds.confirmDialog(title='Preflight Check Failed', message=str(e),
