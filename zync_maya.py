@@ -508,6 +508,8 @@ class SubmitWindow(object):
     #
     #  Callbacks - set up functions to be called as UI elements are modified.
     #
+    cmds.textField('num_instances', e=True, changeCommand=self.change_num_instances)
+    cmds.optionMenu('instance_type', e=True, changeCommand=self.change_instance_type)
     cmds.radioButton('existing_project', e=True, onCommand=self.select_existing_project)
     cmds.radioButton('new_project', e=True, onCommand=self.select_new_project)
     cmds.checkBox('upload_only', e=True, changeCommand=self.upload_only_toggle)
@@ -575,16 +577,23 @@ class SubmitWindow(object):
     else:
       cmds.checkBox('use_standalone', e=True, en=True)
 
+  def change_num_instances(self, *args, **kwargs):
+    self.update_est_cost()
+
+  def change_instance_type(self, *args, **kwargs):
+    self.update_est_cost()
+
   def change_renderer(self, renderer):
     renderer_seen = False
     renderer_key = None
     if renderer in ('vray', 'V-Ray'):
       renderer_seen = True
       renderer_key = 'vray'
-      cmds.checkBox('vray_nightly', e=True, en=True)
-      cmds.checkBox('use_standalone', e=True, en=True)
+      cmds.checkBox('vray_nightly', e=True, en=False)
+      cmds.checkBox('vray_nightly', e=True, v=False)
       cmds.checkBox('distributed', e=True, en=True)
-      cmds.checkBox('use_standalone', e=True, v=False)
+      cmds.checkBox('use_standalone', e=True, en=False)
+      cmds.checkBox('use_standalone', e=True, v=True)
       cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
     else:
       cmds.checkBox('vray_nightly', e=True, en=False)
@@ -601,9 +610,12 @@ class SubmitWindow(object):
     if renderer in ('arnold', 'Arnold'):
       renderer_seen = True
       renderer_key = 'arnold'
-      cmds.checkBox('use_standalone', e=True, en=True)
-      cmds.checkBox('use_standalone', e=True, v=False)
-      cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone (BETA)')
+      cmds.checkBox('use_standalone', e=True, en=False)
+      cmds.checkBox('use_standalone', e=True, v=True)
+      cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
+      cmds.textField('chunk_size', e=True, en=False)
+    else:
+      cmds.textField('chunk_size', e=True, en=True)
     # for any unknown renderer, disable standalone
     if renderer_seen == False:
       cmds.checkBox('use_standalone', e=True, en=False)
@@ -632,6 +644,8 @@ class SubmitWindow(object):
     cmds.optionMenu('job_type', e=True, vis=visible) 
     cmds.text('job_type_label', e=True, vis=visible) 
     self.change_job_type(first_type)
+    self.init_instance_type()
+    self.update_est_cost()
 
   def change_job_type(self, job_type):
     job_type = job_type.lower()
@@ -879,38 +893,55 @@ class SubmitWindow(object):
       cmds.radioButton('existing_project', e=True, en=True)
 
   def init_instance_type(self):
+    current_selected = eval_ui('instance_type', type='optionMenu', v=True)
+    if current_selected == None:
+      current_machine_type = None
+    else:
+      current_machine_type = current_selected.split()[0]
+    old_types = cmds.optionMenu('instance_type', q=True, ill=True)
+    if old_types != None:
+      cmds.deleteUI(old_types)
+    current_renderer = None
+    menu_option = eval_ui('renderer', type='optionMenu', v=True)
+    for k in zync_conn.MAYA_RENDERERS:
+      if zync_conn.MAYA_RENDERERS[k] == menu_option:
+        current_renderer = k
+        break
     sorted_types = [t for t in zync_conn.INSTANCE_TYPES]
     sorted_types.sort(zync_conn.compare_instance_types)
+    set_to = None
     for inst_type in sorted_types:
-      cmds.menuItem(parent='instance_type', label='%s (%s)' % (inst_type, 
-        zync_conn.INSTANCE_TYPES[inst_type]['description']))
+      label = '%s (%s)' % (inst_type, zync_conn.INSTANCE_TYPES[inst_type]['description'])
+      if current_renderer != None:
+        field_name = 'CP-ZYNC-%s-%s' % (inst_type.upper(), current_renderer.upper())
+        if (field_name in zync_conn.PRICING['gcp_price_list'] and 
+          'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
+          cost = '$%.02f' % (float(zync_conn.PRICING['gcp_price_list'][field_name]['us']),) 
+          label += ' %s' % (cost,)
+      if inst_type == current_machine_type:
+        set_to = label 
+      cmds.menuItem(parent='instance_type', label=label)
+    if set_to != None:
+      cmds.optionMenu('instance_type', e=True, v=set_to)
+    self.update_est_cost()
 
   def init_renderer(self):
     #
     #  Try to detect the currently selected renderer, so it will be selected
     #  when the form appears. If we can't, fall back to the default set in zync.py.
     #
-    try:
-      current_renderer = cmds.getAttr('defaultRenderGlobals.currentRenderer')
-      if current_renderer == 'mentalRay':
-        default_renderer_name = zync_conn.MAYA_RENDERERS['mr']
-        self.renderer = 'mr'
-      elif current_renderer == 'vray':
-        default_renderer_name = zync_conn.MAYA_RENDERERS['vray']
-        self.renderer = 'vray'
-      elif current_renderer == 'arnold':
-        if 'arnold' in zync_conn.MAYA_RENDERERS:
-          default_renderer_name = zync_conn.MAYA_RENDERERS['arnold']
-          self.renderer = 'arnold'
-        else:
-          raise Exception('Arnold not supported for this site, using default Zync renderer.')
-      else:
-        default_renderer_name = zync_conn.MAYA_RENDERERS['mr']
-        self.renderer = 'mr'
-    except:
-      default_renderer_name = zync_conn.MAYA_RENDERERS['mr']
-      self.renderer = 'mr'
-
+    current_renderer = cmds.getAttr('defaultRenderGlobals.currentRenderer')
+    if current_renderer == 'mentalRay':
+      key = 'mr'
+    elif current_renderer == 'vray':
+      key = 'vray'
+    elif current_renderer == 'arnold':
+      key = 'arnold'
+    else:
+      key = 'vray'
+    if key in zync_conn.MAYA_RENDERERS:
+      default_renderer_name = zync_conn.MAYA_RENDERERS[key]
+      self.renderer = key
     #
     #  Add the list of renderers to UI element.
     #
@@ -930,6 +961,30 @@ class SubmitWindow(object):
     for cam in cam_parents:
       if (cmds.getAttr(cam + '.renderable')) == True:
         cmds.menuItem(parent='camera', label=cam)
+
+  def update_est_cost(self):
+    machine_type = eval_ui('instance_type', type='optionMenu', v=True)
+    if machine_type != None:
+      machine_type = machine_type.split()[0]
+      renderer_label = eval_ui('renderer', type='optionMenu', v=True)
+      renderer = None
+      for k in zync_conn.MAYA_RENDERERS:
+        if zync_conn.MAYA_RENDERERS[k] == renderer_label:
+          renderer = k
+          break
+      if renderer != None:
+        num_machines = int(eval_ui('num_instances', text=True))
+        field_name = 'CP-ZYNC-%s-%s' % (machine_type.upper(), renderer.upper())
+        if (field_name in zync_conn.PRICING['gcp_price_list'] and 
+          'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
+          text = '$%.02f' % ((num_machines * zync_conn.PRICING['gcp_price_list'][field_name]['us']),) 
+        else:
+          text = 'Not Available'
+      else:
+        text = 'Not Available'
+    else:
+      text = 'Not Available'
+    cmds.text('est_cost', e=True, label='Est. Cost per Hour: %s' % (text,))
 
   def get_scene_info(self, renderer):
     """
@@ -1144,6 +1199,10 @@ class SubmitWindow(object):
         vrscene_path = '%s.vrscene' % (scene_head,)
         vrscene_path_job = zync_conn.generate_file_path(vrscene_path)  
 
+        frange_split = params['frange'].split(',')
+        sf = int(frange_split[0].split('-')[0])
+        ef = int(frange_split[-1].split('-')[-1])
+
         layer_list = params['layers'].split(',')
         for layer in layer_list:  
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
@@ -1182,8 +1241,10 @@ class SubmitWindow(object):
           cmds.setAttr('vraySettings.vfbOn', 0)
 
           cmds.setAttr('vraySettings.animBatchOnly', 0)
+          cmds.setAttr('defaultRenderGlobals.startFrame', sf) 
+          cmds.setAttr('defaultRenderGlobals.endFrame', ef)
 
-          maya.mel.eval('vrend')
+          maya.mel.eval('vrend -camera %s' % (params['camera'],))
 
           vrscene_base, ext = os.path.splitext(vrscene_path_job)
           layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
@@ -1206,41 +1267,50 @@ class SubmitWindow(object):
         ass_path = '%s.ass' % (scene_head,)
         ass_path_job = zync_conn.generate_file_path(ass_path)  
 
+        frange_split = params['frange'].split(',')
+        sf = int(frange_split[0].split('-')[0])
+        ef = int(frange_split[-1].split('-')[-1])
+
         layer_list = params['layers'].split(',')
         for layer in layer_list:  
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
 
           layer_params = copy.deepcopy(params)
 
-          #layer_params['output_dir'] = params['out_path']
+          layer_params['output_dir'] = params['out_path']
 
-          #tail = cmds.getAttr('vraySettings.fileNamePrefix')  
-          #tail = tail.replace('%s', scene_name)
-          #tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
-          #clean_camera = params['camera'].replace(':', '_')
-          #tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
-          #  flags=re.IGNORECASE)
-          #tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
-          #if tail[-1] != '.':
-          #  tail += '.'
+          tail = cmds.getAttr('defaultRenderGlobals.imageFilePrefix')
+          if tail in (None, ''):
+            tail = scene_name
+          else:
+            tail = tail.replace('%s', scene_name)
+            tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
+            clean_camera = params['camera'].replace(':', '_')
+            tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
+              flags=re.IGNORECASE)
+            tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+          if tail[-1] != '.':
+            tail += '.'
 
-          #layer_params['output_filename'] = '%s.%s' % (
-          #  tail, params['scene_info']['extension'])
-
-          sf, ef = params['frange'].split('-')
+          layer_params['output_filename'] = '%s.%s' % (
+            tail, params['scene_info']['extension'])
 
           ass_base, ext = os.path.splitext(ass_path_job)
           layer_file = '%s_%s%s' % (ass_base, layer, ext)
+          layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
 
           ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, ef) +
             '-lightLinks 1 -frameStep 1.0 -startFrame %s ' % (sf,) +
             '-shadowLinks 1 -cam %s' % (params['camera'],))
-          print ass_cmd
           maya.mel.eval(ass_cmd)
 
-          #vrscene_base, ext = os.path.splitext(vrscene_path_job)
-          #layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
-          #zync_conn.submit_job('vray', layer_file, params=layer_params)
+          zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
+
+        cmds.confirmDialog(title='Success', 
+          message='{num_jobs} {label} submitted to Zync.'.format(
+            num_jobs=len(layer_list),
+            label='job' if len(layer_list) == 1 else 'jobs'), 
+          button='OK', defaultButton='OK')
 
         cmds.undoInfo(closeChunk=True)
         cmds.undo()
