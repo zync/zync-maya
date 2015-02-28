@@ -536,7 +536,7 @@ class SubmitWindow(object):
       cmds.optionMenu('renderer', e=True, en=False)
       cmds.optionMenu('job_type', e=True, en=False)
       cmds.checkBox('vray_nightly', e=True, en=False)
-      cmds.checkBox('use_standalone', e=True, en=False)
+      #cmds.checkBox('use_standalone', e=True, en=False)
       cmds.textField('frange', e=True, en=False)
       cmds.textField('frame_step', e=True, en=False)
       cmds.textField('chunk_size', e=True, en=False)
@@ -553,15 +553,15 @@ class SubmitWindow(object):
       cmds.optionMenu('renderer', e=True, en=True)
       if eval_ui('renderer', type='optionMenu', v=True) in ('vray', 'V-Ray'):
         cmds.checkBox('vray_nightly', e=True, en=True)
-        cmds.checkBox('use_standalone', e=True, en=True)
+        #cmds.checkBox('use_standalone', e=True, en=True)
         cmds.checkBox('distributed', e=True, en=True)
       else:
         cmds.checkBox('vray_nightly', e=True, en=False)
         cmds.checkBox('distributed', e=True, en=False)
-      if eval_ui('renderer', type='optionMenu', v=True) in ('mr', 'Mental Ray') and not self.force_mi:
-        cmds.checkBox('use_standalone', e=True, en=True)
-      else:
-        cmds.checkBox('use_standalone', e=True, en=False)
+      #if eval_ui('renderer', type='optionMenu', v=True) in ('mr', 'Mental Ray') and not self.force_mi:
+      #  cmds.checkBox('use_standalone', e=True, en=True)
+      #else:
+      #  cmds.checkBox('use_standalone', e=True, en=False)
       cmds.optionMenu('job_type', e=True, en=True)
       cmds.textField('frange', e=True, en=True)
       cmds.textField('frame_step', e=True, en=True)
@@ -572,10 +572,11 @@ class SubmitWindow(object):
       cmds.textField('y_res', e=True, en=True)
 
   def distributed_toggle(self, checked):
-    if checked:
-      cmds.checkBox('use_standalone', e=True, en=False)
-    else:
-      cmds.checkBox('use_standalone', e=True, en=True)
+    #if checked:
+    #  cmds.checkBox('use_standalone', e=True, en=False)
+    #else:
+    #  cmds.checkBox('use_standalone', e=True, en=True)
+    pass
 
   def change_num_instances(self, *args, **kwargs):
     self.update_est_cost()
@@ -592,35 +593,35 @@ class SubmitWindow(object):
       cmds.checkBox('vray_nightly', e=True, en=False)
       cmds.checkBox('vray_nightly', e=True, v=False)
       cmds.checkBox('distributed', e=True, en=True)
-      cmds.checkBox('use_standalone', e=True, en=False)
-      cmds.checkBox('use_standalone', e=True, v=True)
-      cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
+      #cmds.checkBox('use_standalone', e=True, en=False)
+      #cmds.checkBox('use_standalone', e=True, v=True)
+      #cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
     else:
       cmds.checkBox('vray_nightly', e=True, en=False)
       cmds.checkBox('distributed', e=True, en=False)
     if renderer in ('mr', 'Mental Ray'):
       renderer_seen = True
       renderer_key = 'mr'
-      if self.force_mi:
-        cmds.checkBox('use_standalone', e=True, en=False)
-      else:
-        cmds.checkBox('use_standalone', e=True, en=True)
-      cmds.checkBox('use_standalone', e=True, v=True)
-      cmds.checkBox('use_standalone', e=True, label='Use Mental Ray Standalone')
+      #if self.force_mi:
+      #  cmds.checkBox('use_standalone', e=True, en=False)
+      #else:
+      # cmds.checkBox('use_standalone', e=True, en=True)
+      #cmds.checkBox('use_standalone', e=True, v=True)
+      #cmds.checkBox('use_standalone', e=True, label='Use Mental Ray Standalone')
     if renderer in ('arnold', 'Arnold'):
       renderer_seen = True
       renderer_key = 'arnold'
-      cmds.checkBox('use_standalone', e=True, en=False)
-      cmds.checkBox('use_standalone', e=True, v=True)
-      cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
+      #cmds.checkBox('use_standalone', e=True, en=False)
+      #cmds.checkBox('use_standalone', e=True, v=True)
+      #cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
       cmds.textField('chunk_size', e=True, en=False)
     else:
       cmds.textField('chunk_size', e=True, en=True)
     # for any unknown renderer, disable standalone
-    if renderer_seen == False:
-      cmds.checkBox('use_standalone', e=True, en=False)
-      cmds.checkBox('use_standalone', e=True, v=False)
-      cmds.checkBox('use_standalone', e=True, label='Use Standalone')
+    #if renderer_seen == False:
+    #  cmds.checkBox('use_standalone', e=True, en=False)
+    #  cmds.checkBox('use_standalone', e=True, v=False)
+    #  cmds.checkBox('use_standalone', e=True, label='Use Standalone')
     #
     #  job_types dropdown - remove all items for list, then allow in job types
     #  from zync_conn.JOB_SUBTYPES
@@ -802,7 +803,8 @@ class SubmitWindow(object):
 
     if params['upload_only'] == 0 and params['renderer'] == 'vray':
       params['vray_nightly'] = int(eval_ui('vray_nightly', 'checkBox', v=True))
-      params['use_vrscene'] = int(eval_ui('use_standalone', 'checkBox', v=True))
+      #params['use_vrscene'] = int(eval_ui('use_standalone', 'checkBox', v=True))
+      params['use_vrscene'] = 0 
       if params['use_vrscene'] == 1 and params['job_subtype'] == 'bake':
         cmds.error('Vray Standalone is not currently supported for Bake jobs.')
       params['distributed'] = int(eval_ui('distributed', 'checkBox', v=True))
@@ -814,14 +816,16 @@ class SubmitWindow(object):
       params['vray_nightly'] = 0
       params['use_vrscene'] = 0
       params['distributed'] = 0
-      params['use_mi'] = int(eval_ui('use_standalone', 'checkBox', v=True))
+      #params['use_mi'] = int(eval_ui('use_standalone', 'checkBox', v=True))
+      params['use_mi'] = 0 
       params['use_ass'] = 0
     elif params['upload_only'] == 0 and params['renderer'] == 'arnold':
       params['vray_nightly'] = 0
       params['use_vrscene'] = 0
       params['distributed'] = 0
       params['use_mi'] = 0
-      params['use_ass'] = int(eval_ui('use_standalone', 'checkBox', v=True))
+      #params['use_ass'] = int(eval_ui('use_standalone', 'checkBox', v=True))
+      params['use_ass'] = 0 
     else:
       params['vray_nightly'] = 0
       params['use_vrscene'] = 0
