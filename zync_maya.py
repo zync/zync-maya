@@ -1205,9 +1205,14 @@ class SubmitWindow(object):
 
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
-        ef = int(frange_split[-1].split('-')[-1])
 
-        layer_list = params['layers'].split(',')
+        if params['upload_only'] == 1:
+          layer_list = ['defaultRenderLayer']
+          ef = sf
+        else:
+          layer_list = params['layers'].split(',')
+          ef = int(frange_split[-1].split('-')[-1])
+
         for layer in layer_list:  
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
 
@@ -1251,7 +1256,10 @@ class SubmitWindow(object):
           maya.mel.eval('vrend -camera %s' % (params['camera'],))
 
           vrscene_base, ext = os.path.splitext(vrscene_path_job)
-          layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
+          if layer == 'defaultRenderLayer':
+            layer_file = '%s_masterLayer%s' % (vrscene_base, ext)
+          else:
+            layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
           zync_conn.submit_job('vray', layer_file, params=layer_params)
 
         cmds.undoInfo(closeChunk=True)
@@ -1273,9 +1281,14 @@ class SubmitWindow(object):
 
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
-        ef = int(frange_split[-1].split('-')[-1])
 
-        layer_list = params['layers'].split(',')
+        if params['upload_only'] == 1:
+          layer_list = ['defaultRenderLayer']
+          ef = sf
+        else:
+          layer_list = params['layers'].split(',')
+          ef = int(frange_split[-1].split('-')[-1])
+
         for layer in layer_list:  
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
 
