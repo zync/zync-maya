@@ -590,7 +590,7 @@ class SubmitWindow(object):
     if renderer in ('vray', 'V-Ray'):
       renderer_seen = True
       renderer_key = 'vray'
-      cmds.checkBox('vray_nightly', e=True, en=False)
+      cmds.checkBox('vray_nightly', e=True, en=True)
       cmds.checkBox('vray_nightly', e=True, v=False)
       cmds.checkBox('distributed', e=True, en=True)
       #cmds.checkBox('use_standalone', e=True, en=False)
@@ -1219,6 +1219,7 @@ class SubmitWindow(object):
           layer_params = copy.deepcopy(params)
 
           layer_params['output_dir'] = params['out_path']
+          layer_params['use_nightly'] = params['vray_nightly']
 
           tail = cmds.getAttr('vraySettings.fileNamePrefix')  
           tail = tail.replace('%s', scene_name)
