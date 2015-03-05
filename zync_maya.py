@@ -1220,6 +1220,10 @@ class SubmitWindow(object):
 
           layer_params['output_dir'] = params['out_path']
           layer_params['use_nightly'] = params['vray_nightly']
+          if ('extension' not in params['scene_info'] or
+            params['scene_info']['extension'] == None or
+            params['scene_info']['extension'].strip() == ''):
+            layer_params['scene_info']['extension'] = 'png'
 
           tail = cmds.getAttr('vraySettings.fileNamePrefix')  
           tail = tail.replace('%s', scene_name)
@@ -1233,6 +1237,7 @@ class SubmitWindow(object):
 
           layer_params['output_filename'] = '%s.%s' % (
             tail, params['scene_info']['extension'])
+          layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
 
           cmds.setAttr('vraySettings.vrscene_render_on', 0)
 
@@ -1258,7 +1263,11 @@ class SubmitWindow(object):
 
           vrscene_base, ext = os.path.splitext(vrscene_path_job)
           if layer == 'defaultRenderLayer':
-            layer_file = '%s_masterLayer%s' % (vrscene_base, ext)
+            all_layers = [l for l in cmds.ls(type='renderLayer', showNamespace=True) if l != ':']
+            if len(all_layers) > 1:
+              layer_file = '%s_masterLayer%s' % (vrscene_base, ext)
+            else:
+              layer_file = '%s%s' % (vrscene_base, ext)
           else:
             layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
           zync_conn.submit_job('vray', layer_file, params=layer_params)
@@ -1312,6 +1321,7 @@ class SubmitWindow(object):
 
           layer_params['output_filename'] = '%s.%s' % (
             tail, params['scene_info']['extension'])
+          layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
 
           ass_base, ext = os.path.splitext(ass_path_job)
           layer_file = '%s_%s%s' % (ass_base, layer, ext)
