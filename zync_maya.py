@@ -1236,7 +1236,7 @@ class SubmitWindow(object):
             tail += '.'
 
           layer_params['output_filename'] = '%s.%s' % (
-            tail, params['scene_info']['extension'])
+            tail, layer_params['scene_info']['extension'])
           layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
 
           cmds.setAttr('vraySettings.vrscene_render_on', 0)
