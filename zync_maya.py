@@ -1316,9 +1316,14 @@ class SubmitWindow(object):
             tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
               flags=re.IGNORECASE)
             tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
-            tail = re.sub('%v|<version>', 
-              cmds.getAttr('defaultRenderGlobals.renderVersion'), 
-              tail, flags=re.IGNORECASE)
+            try:
+              render_version = cmds.getAttr('defaultRenderGlobals.renderVersion')
+              if render_version != None:
+                tail = re.sub('%v|<version>', 
+                  cmds.getAttr('defaultRenderGlobals.renderVersion'), 
+                  tail, flags=re.IGNORECASE)
+            except ValueError:
+              pass
           if tail[-1] != '.':
             tail += '.'
 
