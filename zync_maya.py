@@ -1255,12 +1255,13 @@ class SubmitWindow(object):
           cmds.setAttr('vraySettings.misc_compressedVrscene', 1)
 
           cmds.setAttr('vraySettings.vfbOn', 0)
+          cmds.setAttr('vraySettings.hideRVOn', 1)
 
           cmds.setAttr('vraySettings.animBatchOnly', 0)
           cmds.setAttr('defaultRenderGlobals.startFrame', sf) 
           cmds.setAttr('defaultRenderGlobals.endFrame', ef)
 
-          maya.mel.eval('vrend -camera %s' % (params['camera'],))
+          maya.mel.eval('vrend -camera "%s" -layer "%s"' % (params['camera'], layer))
 
           vrscene_base, ext = os.path.splitext(vrscene_path_job)
           if layer == 'defaultRenderLayer':
