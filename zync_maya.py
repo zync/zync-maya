@@ -1201,7 +1201,8 @@ class SubmitWindow(object):
         scene_head, extension = os.path.splitext(scene_path)
         scene_name = os.path.basename(scene_head)
         vrscene_path = '%s.vrscene' % (scene_head,)
-        vrscene_path_job = zync_conn.generate_file_path(vrscene_path)  
+        vrscene_path_job = zync_conn.generate_file_path(vrscene_path)
+        vrscene_path_job = vrscene_path_job.replace('\\', '/')
 
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
@@ -1288,6 +1289,7 @@ class SubmitWindow(object):
         scene_name = os.path.basename(scene_head)
         ass_path = '%s.ass' % (scene_head,)
         ass_path_job = zync_conn.generate_file_path(ass_path)  
+        ass_path_job = ass_path_job.replace('\\', '/')
 
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
