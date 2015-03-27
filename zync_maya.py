@@ -768,13 +768,20 @@ class SubmitWindow(object):
     if parent != None and parent != '':
       params['parent_id'] = parent
     params['upload_only'] = int(eval_ui('upload_only', 'checkBox', v=True))
-    #params['start_new_slots'] = int(not eval_ui('start_new_slots', 'checkBox', v=True))
     params['start_new_slots'] = self.start_new_slots
     params['skip_check'] = int(eval_ui('skip_check', 'checkBox', v=True))
-    #params['notify_complete'] = int(eval_ui('notify_complete', 'checkBox', v=True))
     params['notify_complete'] = self.notify_complete 
     params['project'] = eval_ui('project', text=True)
+
+    #
+    # Get the output path. If it is a relative path, convert it to an 
+    # absolute path by joining it to the Maya project path.
+    #
     params['out_path'] = eval_ui('output_dir', text=True)
+    if not os.path.isabs(params['out_path']):
+      params['out_path'] = os.path.abspath(os.path.join(params['project'], 
+        params['out_path']))
+
     params['ignore_plugin_errors'] = int(eval_ui('ignore_plugin_errors', 'checkBox', v=True))
 
     render = eval_ui('renderer', type='optionMenu', v=True)
