@@ -1234,12 +1234,15 @@ class SubmitWindow(object):
             layer_params['scene_info']['extension'] = 'png'
 
           tail = cmds.getAttr('vraySettings.fileNamePrefix')  
-          tail = tail.replace('%s', scene_name)
-          tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
-          clean_camera = params['camera'].replace(':', '_')
-          tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
-            flags=re.IGNORECASE)
-          tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+          if tail in (None, ''):
+            tail = scene_name
+          else:
+            tail = tail.replace('%s', scene_name)
+            tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
+            clean_camera = params['camera'].replace(':', '_')
+            tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
+              flags=re.IGNORECASE)
+            tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
           if tail[-1] != '.':
             tail += '.'
 
