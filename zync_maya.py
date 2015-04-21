@@ -1163,6 +1163,21 @@ class SubmitWindow(object):
             'arnold_version': arnold_version,
             'vray_version': vray_version,
             'bake_sets': bake_set_info}
+
+    #
+    # If this is an Arnold job and AOVs are on, include a list of AOV
+    # names in scene_info.
+    #
+    if renderer == 'arnold':
+      try:
+        aov_on = cmds.getAttr('defaultArnoldRenderOptions.aovMode')
+      except:
+        aov_on = False
+      if aov_on:
+        scene_info['aovs'] = [cmds.getAttr('%s.name' % (n,)) for n in cmds.ls(type='aiAOV')]
+      else:
+        scene_info['aovs'] = []
+
     return scene_info
 
   @staticmethod
