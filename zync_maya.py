@@ -1198,19 +1198,19 @@ class SubmitWindow(object):
     """
     Submits to zync
     """
+    print 'Collecting render parameters...'
     scene_path = cmds.file(q=True, loc=True)
-
     params = window.get_render_params()
 
-    scene_info = window.get_scene_info(params['renderer'])
-    params['scene_info'] = scene_info
+    print 'Collecting scene info...'
+    params['scene_info'] = window.get_scene_info(params['renderer'])
 
+    print 'Authenticating...'
     username = eval_ui('username', text=True)
     password = eval_ui('password', text=True)
     if username=='' or password=='':
       msg = 'Please enter a Zync username and password.'
       raise MayaZyncException(msg)
-
     try:
       zync_conn.login(username=username, password=password)
     except zync.ZyncAuthenticationError as e:
@@ -1218,6 +1218,8 @@ class SubmitWindow(object):
 
     try:
       if params['renderer'] == 'vray':
+        print 'Vray job, collecting additional info...'
+
         cmds.undoInfo(openChunk=True)
 
         scene_head, extension = os.path.splitext(scene_path)
@@ -1236,7 +1238,9 @@ class SubmitWindow(object):
           layer_list = params['layers'].split(',')
           ef = int(frange_split[-1].split('-')[-1])
 
+        print 'Exporting .vrscene files...'
         for layer in layer_list:  
+          print 'Exporting layer %s...' % (layer,)
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
 
           layer_params = copy.deepcopy(params)
@@ -1297,6 +1301,8 @@ class SubmitWindow(object):
               layer_file = '%s%s' % (vrscene_base, ext)
           else:
             layer_file = '%s_%s%s' % (vrscene_base, layer, ext)
+
+          print 'Submitting job for layer %s...' % (layer,)
           zync_conn.submit_job('vray', layer_file, params=layer_params)
 
         cmds.undoInfo(closeChunk=True)
@@ -1309,6 +1315,8 @@ class SubmitWindow(object):
           button='OK', defaultButton='OK')
 
       elif params['renderer'] == 'arnold':
+        print 'Arnold job, collecting additional info...'
+
         cmds.undoInfo(openChunk=True)
 
         scene_head, extension = os.path.splitext(scene_path)
@@ -1327,7 +1335,9 @@ class SubmitWindow(object):
           layer_list = params['layers'].split(',')
           ef = int(frange_split[-1].split('-')[-1])
 
+        print 'Exporting .ass files...'
         for layer in layer_list:  
+          print 'Exporting layer %s...' % (layer,)
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
 
           layer_params = copy.deepcopy(params)
@@ -1368,16 +1378,17 @@ class SubmitWindow(object):
             '-shadowLinks 1 -cam %s' % (params['camera'],))
           maya.mel.eval(ass_cmd)
 
+          print 'Submitting job for layer %s...' % (layer,)
           zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
+
+        cmds.undoInfo(closeChunk=True)
+        cmds.undo()
 
         cmds.confirmDialog(title='Success', 
           message='{num_jobs} {label} submitted to Zync.'.format(
             num_jobs=len(layer_list),
             label='job' if len(layer_list) == 1 else 'jobs'), 
           button='OK', defaultButton='OK')
-
-        cmds.undoInfo(closeChunk=True)
-        cmds.undo()
 
       else:
         # Uncomment this section if you want to
@@ -1403,6 +1414,9 @@ class SubmitWindow(object):
       cmds.confirmDialog(title='Submission Error',
         message='Error submitting job: %s' % (str(e),),
         button='OK', defaultButton='OK', icon='critical')
+
+    else:
+      print 'Done.'
 
 def submit_dialog():
   submit_window = SubmitWindow()
