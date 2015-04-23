@@ -1002,13 +1002,14 @@ class SubmitWindow(object):
     Returns scene info for the current scene.
     """
 
+    print '--> initializing'
     clear_layer_info()
 
-    layers = [x for x in cmds.ls(type='renderLayer') \
-             if x != 'defaultRenderLayer' and not ':' in x]
+    print '--> render layers'
+    scene_info = {'render_layers': self.layers}
 
-    subtype = eval_ui('job_type', type='optionMenu', v=True).lower()
-    if subtype == 'bake':
+    print '--> checking selections'
+    if eval_ui('job_type', type='optionMenu', v=True).lower() == 'bake':
       selected_bake_sets = eval_ui('layers', 'textScrollList', ai=True, si=True)
       if selected_bake_sets == None:
         selected_bake_sets = []
@@ -1023,25 +1024,25 @@ class SubmitWindow(object):
     #  Detect a list of referenced files. We must use ls() instead of file(q=True, r=True)
     #  because the latter will only detect references one level down, not nested references.
     #
-    references = []
-    unresolved_references = []
+    print '--> references'
+    scene_info['references'] = []
+    scene_info['unresolved_references'] = []
     for ref_node in cmds.ls(type='reference'):
       try:
-        ref_file = cmds.referenceQuery(ref_node, filename=True)
-        references.append(ref_file)
-
-        un_ref_file = cmds.referenceQuery(ref_node, filename=True, unresolvedName=True)
-        unresolved_references.append(un_ref_file)
+        scene_info['references'].append(cmds.referenceQuery(ref_node, filename=True))
+        scene_info['unresolved_references'].append(
+          cmds.referenceQuery(ref_node, filename=True, unresolvedName=True))
       except:
         pass
 
-    render_passes = {}
+    print '--> render passes'
+    scene_info['render_passes'] = {}
     if renderer == 'vray' and cmds.getAttr('vraySettings.imageFormatStr') != 'exr (multichannel)':
       pass_list = cmds.ls(type='VRayRenderElement')
       pass_list += cmds.ls(type='VRayRenderElementSet')
       if len(pass_list) > 0:
         for layer in selected_layers:
-          render_passes[layer] = []
+          scene_info['render_passes'][layer] = []
           enabled_passes = get_layer_override(layer, renderer, 'render_passes')
           for r_pass in pass_list:
             if r_pass in enabled_passes:
@@ -1069,61 +1070,68 @@ class SubmitWindow(object):
                 connections = cmds.listConnections('%s.vray_mtl_mtlselect' % (r_pass,))
                 if connections:
                   final_name += '_%s' % (str(connections[0]),)
-              render_passes[layer].append(final_name)
+              scene_info['render_passes'][layer].append(final_name)
 
-    layer_prefixes = dict()
+    print '--> bake sets'
+    scene_info['bake_sets'] = {}
+    for bake_set in selected_bake_sets:
+      scene_info['bake_sets'][bake_set] = {
+        'uvs': self.get_bake_set_uvs(bake_set),
+        'map': self.get_bake_set_map(bake_set),
+        'shape': self.get_bake_set_shape(bake_set),
+        'output_path': self.get_bake_set_output_path(bake_set)
+      }
+
+    print '--> frame extension & padding'
+    if renderer == 'vray':
+      scene_info['extension'] = cmds.getAttr('vraySettings.imageFormatStr')
+      if scene_info['extension'] == None:
+        scene_info['extension'] = 'png'
+      scene_info['padding'] = int(cmds.getAttr('vraySettings.fileNamePadding'))
+    elif renderer == 'mr':
+      scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
+      if not scene_info['extension']:
+        scene_info['extension'] = get_default_extension(renderer)
+      scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
+    elif renderer == 'arnold':
+      scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
+      scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
+    scene_info['extension'] = scene_info['extension'][:3]
+
+    print '--> output file prefixes'
+    scene_info['file_prefix'] = [get_layer_override('defaultRenderLayer', renderer, 'prefix')]
+    layer_prefixes = {}
     for layer in selected_layers:
       layer_prefix = get_layer_override(layer, renderer, 'prefix')
       if layer_prefix != None:
         layer_prefixes[layer] = layer_prefix
+    scene_info['file_prefix'].append(layer_prefixes)
 
-    bake_set_info = dict()
-    for bake_set in selected_bake_sets:
-      bake_set_info[bake_set] = {}
-      bake_set_info[bake_set]['uvs'] = self.get_bake_set_uvs(bake_set)
-      bake_set_info[bake_set]['map'] = self.get_bake_set_map(bake_set)
-      bake_set_info[bake_set]['shape'] = self.get_bake_set_shape(bake_set)
-      bake_set_info[bake_set]['output_path'] = self.get_bake_set_output_path(bake_set)
+    print '--> files'
+    scene_info['files'] = list(set(get_scene_files()))
 
-    if renderer == 'vray':
-      extension = cmds.getAttr('vraySettings.imageFormatStr')
-      if extension == None:
-        extension = 'png'
-      padding = int(cmds.getAttr('vraySettings.fileNamePadding'))
-    elif renderer == 'mr':
-      extension = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
-      if not extension:
-        extension = get_default_extension(renderer)
-      padding = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
-    elif renderer == 'arnold':
-      extension = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
-      padding = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
-    global_prefix = get_layer_override('defaultRenderLayer', renderer, 'prefix')
-
-    extension = extension[:3]
-
-    file_prefix = [global_prefix]
-    file_prefix.append(layer_prefixes)
-    files = list(set(get_scene_files()))
-
-    plugins = []
+    print '--> plugins'
+    scene_info['plugins'] = []
     plugin_list = cmds.pluginInfo(query=True, pluginsInUse=True)
     for i in range(0, len(plugin_list), 2): 
-      plugins.append(str(plugin_list[i]))
+      scene_info['plugins'].append(str(plugin_list[i]))
 
     # detect MentalCore
-    mentalcore_used = False
-    try:
-      mc_nodes = cmds.ls(type='core_globals')
-      if len(mc_nodes) == 0:
-        mentalcore_used = False
-      else:
-        mc_node = mc_nodes[0]
-        if cmds.getAttr('%s.ec' % (mc_node,)) == True:
-          mentalcore_used = True
-        else:
+    if renderer == 'mr':
+      mentalcore_used = False
+      try:
+        mc_nodes = cmds.ls(type='core_globals')
+        if len(mc_nodes) == 0:
           mentalcore_used = False
-    except:
+        else:
+          mc_node = mc_nodes[0]
+          if cmds.getAttr('%s.ec' % (mc_node,)) == True:
+            mentalcore_used = True
+          else:
+            mentalcore_used = False
+      except:
+        mentalcore_used = False
+    else:
       mentalcore_used = False
     if mentalcore_used:
       plugins.append('mentalcore')
@@ -1132,37 +1140,24 @@ class SubmitWindow(object):
     if len(cmds.ls(type='cacheFile')) > 0:
       plugins.append('cache')
 
-    version = get_maya_version() 
+    print '--> maya version'
+    scene_info['version'] = get_maya_version() 
 
-    vray_version = ''
+    scene_info['vray_version'] = ''
     if renderer == 'vray':
+      print '--> vray version'
       try:
-        vray_version = str(cmds.pluginInfo('vrayformaya', query=True, version=True)) 
+        scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True)) 
       except:
         raise Exception('Could not detect Vray version. This is required to render Vray jobs. Do you have the Vray plugin loaded?')
 
-    arnold_version = ''
+    scene_info['arnold_version'] = ''
     if renderer == 'arnold':
+      print '--> arnold version'
       try:
-        arnold_version = str(cmds.pluginInfo('mtoa', query=True, version=True)) 
+        scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True)) 
       except:
         raise Exception('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
-
-    #original_scene_name = os.path.basename(cmds.file(q=True, loc=True))
-
-    scene_info = {'files': files,
-            'render_layers': self.layers,
-            'render_passes': render_passes,
-            'references': references,
-            'unresolved_references': unresolved_references,
-            'file_prefix': file_prefix,
-            'padding': padding,
-            'extension': extension,
-            'plugins': plugins,
-            'version': version,
-            'arnold_version': arnold_version,
-            'vray_version': vray_version,
-            'bake_sets': bake_set_info}
 
     #
     # If this is an Arnold job and AOVs are on, include a list of AOV
@@ -1174,6 +1169,7 @@ class SubmitWindow(object):
       except:
         aov_on = False
       if aov_on:
+        print '--> AOVs'
         scene_info['aovs'] = [cmds.getAttr('%s.name' % (n,)) for n in cmds.ls(type='aiAOV')]
       else:
         scene_info['aovs'] = []
