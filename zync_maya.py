@@ -368,27 +368,13 @@ def get_layer_override(layer, renderer, field):
   return LAYER_INFO[layer][field]
 
 def get_maya_version():
-  api_version = maya.mel.eval("about -api")
-  maya_version = 2013 # default
-  # 2012
-  if api_version in range(201215, 201299):
-    maya_version = 2012
-  # 2013
-  elif api_version in range(201300, 201349):
-    maya_version = 2013
-  # 2013.5
-  elif api_version in range(201350, 201399):
-    maya_version = 2013.5
-  # 2014
-  elif api_version in range(201400, 201499):
-    maya_version = 2014
-  else:
-    version_split = str(cmds.fileInfo("version", query=True)[0]).split(" ")
-    if len(version_split) > 1:
-      maya_version = " ".join(version_split[:-1]).strip()
-    else:
-      maya_version = " ".join(version_split).strip()
-  return str(maya_version)
+  """Returns the current major Maya version in use."""
+  #
+  # "about -api" returns a value containing both major and minor
+  # maya versions in one integer, e.g. 201515. Divide by 100 to
+  # find the major version.
+  #
+  return str(int(float(maya.mel.eval('about -api')) / 100))
 
 class MayaZyncException(Exception):
   """
