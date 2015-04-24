@@ -1120,11 +1120,11 @@ class SubmitWindow(object):
     else:
       mentalcore_used = False
     if mentalcore_used:
-      plugins.append('mentalcore')
+      scene_info['plugins'].append('mentalcore')
 
     # detect use of cache files
     if len(cmds.ls(type='cacheFile')) > 0:
-      plugins.append('cache')
+      scene_info['plugins'].append('cache')
 
     print '--> maya version'
     scene_info['version'] = get_maya_version() 
