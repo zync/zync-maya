@@ -1269,6 +1269,7 @@ class SubmitWindow(object):
           cmds.setAttr('vraySettings.hideRVOn', 1)
 
           cmds.setAttr('vraySettings.animBatchOnly', 0)
+          cmds.setAttr('defaultRenderGlobals.animation', 1)
           cmds.setAttr('defaultRenderGlobals.startFrame', sf) 
           cmds.setAttr('defaultRenderGlobals.endFrame', ef)
 
