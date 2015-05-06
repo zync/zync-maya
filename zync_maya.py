@@ -1251,28 +1251,51 @@ class SubmitWindow(object):
             tail, layer_params['scene_info']['extension'])
           layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
 
+          #
+          # Set up render globals for vray export. These changes will
+          # be reverted later when we run cmds.undo().
+          #
+          # Turn rendering off.
+          #
           cmds.setAttr('vraySettings.vrscene_render_on', 0)
-
+          #
+          # Turn Vrscene export on.
+          #
           cmds.setAttr('vraySettings.vrscene_on', 1)
-
+          #
+          # Set the Vrscene export filename.
+          #
           cmds.setAttr('vraySettings.vrscene_filename', vrscene_path_job, type='string')
-
+          #
+          # Ensure we export only a single file.
+          #
           cmds.setAttr('vraySettings.misc_separateFiles', 0)
-
           cmds.setAttr('vraySettings.misc_eachFrameInFile', 0)
-
+          #
+          # Set compression options.
+          #
           cmds.setAttr('vraySettings.misc_meshAsHex', 1)
           cmds.setAttr('vraySettings.misc_transformAsHex', 1)
           cmds.setAttr('vraySettings.misc_compressedVrscene', 1)
-
+          #
+          # Turn the VFB off, make sure the viewer is hidden.
+          #
           cmds.setAttr('vraySettings.vfbOn', 0)
           cmds.setAttr('vraySettings.hideRVOn', 1)
-
+          #
+          # Ensure animation is fully enabled and configured with the correct
+          # frame range. This is usually the case already, but some users will
+          # have it disabled expecting their existing local farm to update
+          # with the correct settings.
+          #
           cmds.setAttr('vraySettings.animBatchOnly', 0)
           cmds.setAttr('defaultRenderGlobals.animation', 1)
           cmds.setAttr('defaultRenderGlobals.startFrame', sf) 
           cmds.setAttr('defaultRenderGlobals.endFrame', ef)
 
+          #
+          # Run the export.
+          #
           maya.mel.eval('vrend -camera "%s" -layer "%s"' % (params['camera'], layer))
 
           vrscene_base, ext = os.path.splitext(vrscene_path_job)
