@@ -44,6 +44,7 @@ UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
 import maya.cmds as cmds
 import maya.mel
+import maya.utils
 
 def eval_ui(path, type='textField', **kwargs):
   """
@@ -439,6 +440,7 @@ class SubmitWindow(object):
     self.use_standalone = 0
     self.distributed = 0
     self.ignore_plugin_errors = 0
+    self.login_type = 'zync'
 
     mi_setting = zync_conn.get_config(var='USE_MI')
     if mi_setting in (None, '', 1, '1'):
@@ -1178,7 +1180,9 @@ class SubmitWindow(object):
 
   @staticmethod
   def login_with_google(window):
-    print 'STUB: login_with_google()'
+    window.login_type = 'google'
+    user_email = zync_conn.login_with_google()
+    cmds.text('google_login_status', e=True, label='Logged in as %s' % user_email)
 
   @staticmethod
   def submit(window):
@@ -1192,16 +1196,17 @@ class SubmitWindow(object):
     print 'Collecting scene info...'
     params['scene_info'] = window.get_scene_info(params['renderer'])
 
-    print 'Authenticating...'
-    username = eval_ui('username', text=True)
-    password = eval_ui('password', text=True)
-    if username=='' or password=='':
-      msg = 'Please enter a Zync username and password.'
-      raise MayaZyncException(msg)
-    try:
-      zync_conn.login(username=username, password=password)
-    except zync.ZyncAuthenticationError as e:
-      raise MayaZyncException('Zync username authentication failed.')
+    if window.login_type == 'zync':
+      print 'Authenticating...'
+      username = eval_ui('username', text=True)
+      password = eval_ui('password', text=True)
+      if username=='' or password=='':
+        msg = 'Please enter a Zync username and password.'
+        raise MayaZyncException(msg)
+      try:
+        zync_conn.login(username=username, password=password)
+      except zync.ZyncAuthenticationError as e:
+        raise MayaZyncException('Zync username authentication failed.')
 
     try:
       if params['renderer'] == 'vray':
