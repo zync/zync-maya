@@ -478,6 +478,7 @@ class SubmitWindow(object):
     #
     cmds.submit_callb = partial(self.get_initial_value, self)
     cmds.do_submit_callb = partial(self.submit, self)
+    cmds.login_with_google_callb = partial(self.login_with_google, self)
 
     #
     #  Delete the "SubmitDialog" window if it exists.
@@ -1174,6 +1175,10 @@ class SubmitWindow(object):
       return getattr(window, name)
     else:
       return 'Undefined'
+
+  @staticmethod
+  def login_with_google(window):
+    print 'STUB: login_with_google()'
 
   @staticmethod
   def submit(window):
