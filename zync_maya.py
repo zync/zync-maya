@@ -1300,8 +1300,19 @@ class SubmitWindow(object):
 
           vrscene_base, ext = os.path.splitext(vrscene_path_job)
           if layer == 'defaultRenderLayer':
-            all_layers = [l for l in cmds.ls(type='renderLayer', showNamespace=True) if l != ':']
-            if len(all_layers) > 1:
+            # Get a list of all local (i.e. not-imported) render layers. cmds.ls() 
+            # returns a flat list of layers and namespaces like:
+            # ['imported_file:layer1', 'imported_file',
+            #   'local_layer', ':']
+            # A namespace of ":" indicates a local layer. We need this list because
+            # Vray names its exported .vrscene inconsistently; if other local layers
+            # are present, Vray adds a "_masterLayer" suffix to the name.
+            local_layers = []
+            all_layers = cmds.ls(type='renderLayer', showNamespace=True)
+            for i in range(0, len(all_layers), 2):
+              if all_layers[i+1] == ':':
+                local_layers.append(all_layers[i])
+            if len(local_layers) > 1:
               layer_file = '%s_masterLayer%s' % (vrscene_base, ext)
             else:
               layer_file = '%s%s' % (vrscene_base, ext)
