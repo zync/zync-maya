@@ -1145,13 +1145,14 @@ class SubmitWindow(object):
       except:
         raise Exception('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
 
-    #
     # If this is an Arnold job and AOVs are on, include a list of AOV
-    # names in scene_info.
-    #
+    # names in scene_info. If "Merge AOVs" is on, i.e. multichannel EXRs,
+    # the AOVs will be rendered in a single image, so consider AOVs to be
+    # OFF for purposes of the Zync job.
     if renderer == 'arnold':
       try:
-        aov_on = cmds.getAttr('defaultArnoldRenderOptions.aovMode')
+        aov_on = (cmds.getAttr('defaultArnoldRenderOptions.aovMode') and
+          not cmds.getAttr('defaultArnoldDriver.mergeAOVs'))
       except:
         aov_on = False
       if aov_on:
