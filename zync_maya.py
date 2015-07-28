@@ -44,6 +44,7 @@ UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
 import maya.cmds as cmds
 import maya.mel
+import maya.utils
 
 def eval_ui(path, type='textField', **kwargs):
   """
@@ -439,6 +440,7 @@ class SubmitWindow(object):
     self.use_standalone = 0
     self.distributed = 0
     self.ignore_plugin_errors = 0
+    self.login_type = 'zync'
 
     mi_setting = zync_conn.get_config(var='USE_MI')
     if mi_setting in (None, '', 1, '1'):
@@ -478,6 +480,7 @@ class SubmitWindow(object):
     #
     cmds.submit_callb = partial(self.get_initial_value, self)
     cmds.do_submit_callb = partial(self.submit, self)
+    cmds.login_with_google_callb = partial(self.login_with_google, self)
 
     #
     #  Delete the "SubmitDialog" window if it exists.
@@ -1165,8 +1168,15 @@ class SubmitWindow(object):
 
   @staticmethod
   def get_initial_value(window, name):
-    """
-    Returns the initial value for a given attribute
+    """Returns the initial value for a given attribute.
+
+    Args:
+      window: The Zync Maya UI window
+      name: str the attribute name
+
+    Returns:
+      str, the initial attribute value, or "Undefined" if the attribute was
+        not found
     """
     init_name = '_'.join(('init', name))
     if hasattr(window, init_name):
@@ -1177,9 +1187,22 @@ class SubmitWindow(object):
       return 'Undefined'
 
   @staticmethod
-  def submit(window):
+  def login_with_google(window):
+    """Perform the Google OAuth flow.
+
+    Args:
+      window: The Zync Maya UI window
     """
-    Submits to zync
+    window.login_type = 'google'
+    user_email = zync_conn.login_with_google()
+    cmds.text('google_login_status', e=True, label='Logged in as %s' % user_email)
+
+  @staticmethod
+  def submit(window):
+    """Submit a job to Zync.
+
+    Args:
+      window: The Zync Maya UI window
     """
     print 'Collecting render parameters...'
     scene_path = cmds.file(q=True, loc=True)
@@ -1188,16 +1211,20 @@ class SubmitWindow(object):
     print 'Collecting scene info...'
     params['scene_info'] = window.get_scene_info(params['renderer'])
 
-    print 'Authenticating...'
-    username = eval_ui('username', text=True)
-    password = eval_ui('password', text=True)
-    if username=='' or password=='':
-      msg = 'Please enter a Zync username and password.'
-      raise MayaZyncException(msg)
-    try:
-      zync_conn.login(username=username, password=password)
-    except zync.ZyncAuthenticationError as e:
-      raise MayaZyncException('Zync username authentication failed.')
+    # For standard Zync logins, we need to perform the login process. Otherwise
+    # an OAuth login is being used, and we assume the Zync connection has
+    # already been authenticated.
+    if window.login_type == 'zync':
+      print 'Authenticating...'
+      username = eval_ui('username', text=True)
+      password = eval_ui('password', text=True)
+      if username=='' or password=='':
+        msg = 'Please enter a Zync username and password.'
+        raise MayaZyncException(msg)
+      try:
+        zync_conn.login(username=username, password=password)
+      except zync.ZyncAuthenticationError as e:
+        raise MayaZyncException('Zync username authentication failed.')
 
     try:
       if params['renderer'] == 'vray':
