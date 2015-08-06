@@ -262,15 +262,15 @@ def _aiStandIn_handler(node):
 def _aiImage_handler(node):
   """Handles aiImage nodes"""
   yield (cmds.getAttr('%s.filename' % (node,)),)
-  
+
 def _aiPhotometricLight_handler(node):
   """Handles aiPhotometricLight nodes"""
   yield (cmds.getAttr('%s.aiFilename' % (node,)),)
- 
+
 def _exocortex_handler(node):
   """Handles Exocortex Alembic nodes"""
   yield (cmds.getAttr('%s.fileName' % (node,)),)
-  
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {'file': _file_handler,
@@ -307,7 +307,7 @@ def get_scene_files():
 
 def get_default_extension(renderer):
   """
-  Returns the filename prefix for the given renderer, either mental ray 
+  Returns the filename prefix for the given renderer, either mental ray
   or maya software.
   """
   if renderer == 'sw':
@@ -333,9 +333,9 @@ def collect_layer_info(layer, renderer):
 
   # get list of active render passes
   layer_info['render_passes'] = []
-  if (renderer == 'vray' and 
-    cmds.getAttr('vraySettings.imageFormatStr') != 'exr (multichannel)' 
-    and cmds.getAttr('vraySettings.relements_enableall') != False): 
+  if (renderer == 'vray' and
+    cmds.getAttr('vraySettings.imageFormatStr') != 'exr (multichannel)'
+    and cmds.getAttr('vraySettings.relements_enableall') != False):
     pass_list = cmds.ls(type='VRayRenderElement')
     pass_list += cmds.ls(type='VRayRenderElementSet')
     for r_pass in pass_list:
@@ -413,7 +413,7 @@ class SubmitWindow(object):
     self.project = proj_dir()
     if self.project[-1] == '/':
       self.project = self.project[:-1]
-            
+
     # set output directory. if the workspace has a mapping for "images", use that.
     # otherwise default to the images/ folder.
     self.output_dir = cmds.workspace(q=True, rd=True)
@@ -450,7 +450,7 @@ class SubmitWindow(object):
 
     self.x_res = cmds.getAttr('defaultResolution.width')
     self.y_res = cmds.getAttr('defaultResolution.height')
- 
+
     self.init_layers()
     self.init_bake()
 
@@ -475,7 +475,7 @@ class SubmitWindow(object):
     #  which causes its value to be set to whatever the value of self.frange
     #  is currently set to.
     #
-    #  Initial values can also be function based. For example, the "renderer" dropdown 
+    #  Initial values can also be function based. For example, the "renderer" dropdown
     #  calls cmds.submit_callb('renderer'), which in turn triggers self.init_renderer().
     #
     cmds.submit_callb = partial(self.get_initial_value, self)
@@ -487,7 +487,7 @@ class SubmitWindow(object):
     #
     if cmds.window('SubmitDialog', q=True, ex=True):
       cmds.deleteUI('SubmitDialog')
-    
+
     #
     #  Load the UI file. See the init_* functions below for more info on
     #  what each UI element does as it's loaded.
@@ -631,8 +631,8 @@ class SubmitWindow(object):
     else:
       print cmds.menuItem(parent='job_type', label='Render')
       first_type = 'Render'
-    cmds.optionMenu('job_type', e=True, vis=visible) 
-    cmds.text('job_type_label', e=True, vis=visible) 
+    cmds.optionMenu('job_type', e=True, vis=visible)
+    cmds.text('job_type_label', e=True, vis=visible)
     self.change_job_type(first_type)
     self.init_instance_type()
     self.update_est_cost()
@@ -759,16 +759,16 @@ class SubmitWindow(object):
     params['upload_only'] = int(eval_ui('upload_only', 'checkBox', v=True))
     params['start_new_slots'] = self.start_new_slots
     params['skip_check'] = int(eval_ui('skip_check', 'checkBox', v=True))
-    params['notify_complete'] = self.notify_complete 
+    params['notify_complete'] = self.notify_complete
     params['project'] = eval_ui('project', text=True)
 
     #
-    # Get the output path. If it is a relative path, convert it to an 
+    # Get the output path. If it is a relative path, convert it to an
     # absolute path by joining it to the Maya project path.
     #
     params['out_path'] = eval_ui('output_dir', text=True)
     if not os.path.isabs(params['out_path']):
-      params['out_path'] = os.path.abspath(os.path.join(params['project'], 
+      params['out_path'] = os.path.abspath(os.path.join(params['project'],
         params['out_path']))
 
     params['ignore_plugin_errors'] = int(eval_ui('ignore_plugin_errors', 'checkBox', v=True))
@@ -786,7 +786,7 @@ class SubmitWindow(object):
 
     selected_type = eval_ui('instance_type', 'optionMenu', v=True)
     for inst_type in zync_conn.INSTANCE_TYPES:
-      if selected_type.split(' ')[0] == inst_type:
+      if selected_type.split(' (')[0] == inst_type:
         params['instance_type'] = inst_type
         break
 
@@ -800,7 +800,7 @@ class SubmitWindow(object):
     if params['upload_only'] == 0 and params['renderer'] == 'vray':
       params['vray_nightly'] = int(eval_ui('vray_nightly', 'checkBox', v=True))
       #params['use_vrscene'] = int(eval_ui('use_standalone', 'checkBox', v=True))
-      params['use_vrscene'] = 0 
+      params['use_vrscene'] = 0
       if params['use_vrscene'] == 1 and params['job_subtype'] == 'bake':
         cmds.error('Vray Standalone is not currently supported for Bake jobs.')
       params['distributed'] = int(eval_ui('distributed', 'checkBox', v=True))
@@ -813,7 +813,7 @@ class SubmitWindow(object):
       params['use_vrscene'] = 0
       params['distributed'] = 0
       #params['use_mi'] = int(eval_ui('use_standalone', 'checkBox', v=True))
-      params['use_mi'] = 0 
+      params['use_mi'] = 0
       params['use_ass'] = 0
     elif params['upload_only'] == 0 and params['renderer'] == 'arnold':
       params['vray_nightly'] = 0
@@ -821,7 +821,7 @@ class SubmitWindow(object):
       params['distributed'] = 0
       params['use_mi'] = 0
       #params['use_ass'] = int(eval_ui('use_standalone', 'checkBox', v=True))
-      params['use_ass'] = 0 
+      params['use_ass'] = 0
     else:
       params['vray_nightly'] = 0
       params['use_vrscene'] = 0
@@ -855,7 +855,7 @@ class SubmitWindow(object):
     Displays the window.
     """
     cmds.showWindow(self.name)
- 
+
   def init_bake(self):
     self.bake_sets = (bake_set for bake_set in cmds.ls(type='VRayBakeOptions') \
       if bake_set != 'vrayDefaultBakeOptions')
@@ -897,7 +897,7 @@ class SubmitWindow(object):
     if current_selected == None:
       current_machine_type = None
     else:
-      current_machine_type = current_selected.split()[0]
+      current_machine_type = current_selected.split(' (')[0]
     old_types = cmds.optionMenu('instance_type', q=True, ill=True)
     if old_types != None:
       cmds.deleteUI(old_types)
@@ -914,12 +914,12 @@ class SubmitWindow(object):
       label = '%s (%s)' % (inst_type, zync_conn.INSTANCE_TYPES[inst_type]['description'])
       if current_renderer != None:
         field_name = 'CP-ZYNC-%s-%s' % (inst_type.upper(), current_renderer.upper())
-        if (field_name in zync_conn.PRICING['gcp_price_list'] and 
+        if (field_name in zync_conn.PRICING['gcp_price_list'] and
           'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
-          cost = '$%.02f' % (float(zync_conn.PRICING['gcp_price_list'][field_name]['us']),) 
+          cost = '$%.02f' % (float(zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
           label += ' %s' % (cost,)
       if inst_type == current_machine_type:
-        set_to = label 
+        set_to = label
       cmds.menuItem(parent='instance_type', label=label)
     if set_to != None:
       cmds.optionMenu('instance_type', e=True, v=set_to)
@@ -965,7 +965,7 @@ class SubmitWindow(object):
   def update_est_cost(self):
     machine_type = eval_ui('instance_type', type='optionMenu', v=True)
     if machine_type != None:
-      machine_type = machine_type.split()[0]
+      machine_type = machine_type.split(' (')[0]
       renderer_label = eval_ui('renderer', type='optionMenu', v=True)
       renderer = None
       for k in zync_conn.MAYA_RENDERERS:
@@ -975,9 +975,9 @@ class SubmitWindow(object):
       if renderer != None:
         num_machines = int(eval_ui('num_instances', text=True))
         field_name = 'CP-ZYNC-%s-%s' % (machine_type.upper(), renderer.upper())
-        if (field_name in zync_conn.PRICING['gcp_price_list'] and 
+        if (field_name in zync_conn.PRICING['gcp_price_list'] and
           'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
-          text = '$%.02f' % ((num_machines * zync_conn.PRICING['gcp_price_list'][field_name]['us']),) 
+          text = '$%.02f' % ((num_machines * zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
         else:
           text = 'Not Available'
       else:
@@ -1102,7 +1102,7 @@ class SubmitWindow(object):
     print '--> plugins'
     scene_info['plugins'] = []
     plugin_list = cmds.pluginInfo(query=True, pluginsInUse=True)
-    for i in range(0, len(plugin_list), 2): 
+    for i in range(0, len(plugin_list), 2):
       scene_info['plugins'].append(str(plugin_list[i]))
 
     # detect MentalCore
@@ -1130,13 +1130,13 @@ class SubmitWindow(object):
       scene_info['plugins'].append('cache')
 
     print '--> maya version'
-    scene_info['version'] = get_maya_version() 
+    scene_info['version'] = get_maya_version()
 
     scene_info['vray_version'] = ''
     if renderer == 'vray':
       print '--> vray version'
       try:
-        scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True)) 
+        scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
       except:
         raise Exception('Could not detect Vray version. This is required to render Vray jobs. Do you have the Vray plugin loaded?')
 
@@ -1144,7 +1144,7 @@ class SubmitWindow(object):
     if renderer == 'arnold':
       print '--> arnold version'
       try:
-        scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True)) 
+        scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True))
       except:
         raise Exception('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
 
@@ -1249,7 +1249,7 @@ class SubmitWindow(object):
           ef = int(frange_split[-1].split('-')[-1])
 
         print 'Exporting .vrscene files...'
-        for layer in layer_list:  
+        for layer in layer_list:
           print 'Exporting layer %s...' % (layer,)
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
 
@@ -1262,7 +1262,7 @@ class SubmitWindow(object):
             params['scene_info']['extension'].strip() == ''):
             layer_params['scene_info']['extension'] = 'png'
 
-          tail = cmds.getAttr('vraySettings.fileNamePrefix')  
+          tail = cmds.getAttr('vraySettings.fileNamePrefix')
           if tail in (None, ''):
             tail = scene_name
           else:
@@ -1307,7 +1307,7 @@ class SubmitWindow(object):
           # with the correct settings.
           cmds.setAttr('vraySettings.animBatchOnly', 0)
           cmds.setAttr('defaultRenderGlobals.animation', 1)
-          cmds.setAttr('defaultRenderGlobals.startFrame', sf) 
+          cmds.setAttr('defaultRenderGlobals.startFrame', sf)
           cmds.setAttr('defaultRenderGlobals.endFrame', ef)
 
           # Run the export.
@@ -1315,7 +1315,7 @@ class SubmitWindow(object):
 
           vrscene_base, ext = os.path.splitext(vrscene_path_job)
           if layer == 'defaultRenderLayer':
-            # Get a list of all local (i.e. not-imported) render layers. cmds.ls() 
+            # Get a list of all local (i.e. not-imported) render layers. cmds.ls()
             # returns a flat list of layers and namespaces like:
             # ['imported_file:layer1', 'imported_file',
             #   'local_layer', ':']
@@ -1340,10 +1340,10 @@ class SubmitWindow(object):
         cmds.undoInfo(closeChunk=True)
         cmds.undo()
 
-        cmds.confirmDialog(title='Success', 
+        cmds.confirmDialog(title='Success',
           message='{num_jobs} {label} submitted to Zync.'.format(
             num_jobs=len(layer_list),
-            label='job' if len(layer_list) == 1 else 'jobs'), 
+            label='job' if len(layer_list) == 1 else 'jobs'),
           button='OK', defaultButton='OK')
 
       elif params['renderer'] == 'arnold':
@@ -1354,7 +1354,7 @@ class SubmitWindow(object):
         scene_head, extension = os.path.splitext(scene_path)
         scene_name = os.path.basename(scene_head)
         ass_path = '%s.ass' % (scene_head,)
-        ass_path_job = zync_conn.generate_file_path(ass_path)  
+        ass_path_job = zync_conn.generate_file_path(ass_path)
         ass_path_job = ass_path_job.replace('\\', '/')
 
         frange_split = params['frange'].split(',')
@@ -1368,7 +1368,7 @@ class SubmitWindow(object):
           ef = int(frange_split[-1].split('-')[-1])
 
         print 'Exporting .ass files...'
-        for layer in layer_list:  
+        for layer in layer_list:
           print 'Exporting layer %s...' % (layer,)
           cmds.editRenderLayerGlobals(currentRenderLayer=layer)
 
@@ -1389,8 +1389,8 @@ class SubmitWindow(object):
             try:
               render_version = cmds.getAttr('defaultRenderGlobals.renderVersion')
               if render_version != None:
-                tail = re.sub('%v|<version>', 
-                  cmds.getAttr('defaultRenderGlobals.renderVersion'), 
+                tail = re.sub('%v|<version>',
+                  cmds.getAttr('defaultRenderGlobals.renderVersion'),
                   tail, flags=re.IGNORECASE)
             except ValueError:
               pass
@@ -1416,10 +1416,10 @@ class SubmitWindow(object):
         cmds.undoInfo(closeChunk=True)
         cmds.undo()
 
-        cmds.confirmDialog(title='Success', 
+        cmds.confirmDialog(title='Success',
           message='{num_jobs} {label} submitted to Zync.'.format(
             num_jobs=len(layer_list),
-            label='job' if len(layer_list) == 1 else 'jobs'), 
+            label='job' if len(layer_list) == 1 else 'jobs'),
           button='OK', defaultButton='OK')
 
       else:
