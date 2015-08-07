@@ -911,9 +911,12 @@ class SubmitWindow(object):
     sorted_types.sort(zync_conn.compare_instance_types)
     set_to = None
     for inst_type in sorted_types:
-      label = '%s (%s)' % (inst_type, zync_conn.INSTANCE_TYPES[inst_type]['description'])
+      label = '%s (%s)' % (inst_type, zync_conn.INSTANCE_TYPES[inst_type]['description'].replace(', preemptible',''))
       if current_renderer != None:
-        field_name = 'CP-ZYNC-%s-%s' % (inst_type.upper(), current_renderer.upper())
+        inst_type_base = inst_type.split(' ')[-1]
+        field_name = 'CP-ZYNC-%s-%s' % (inst_type_base.upper(), current_renderer.upper())
+        if 'PREEMPTIBLE' in inst_type.upper():
+          field_name += '-PREEMPTIBLE'
         if (field_name in zync_conn.PRICING['gcp_price_list'] and
           'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
           cost = '$%.02f' % (float(zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
@@ -974,7 +977,10 @@ class SubmitWindow(object):
           break
       if renderer != None:
         num_machines = int(eval_ui('num_instances', text=True))
-        field_name = 'CP-ZYNC-%s-%s' % (machine_type.upper(), renderer.upper())
+        machine_type_base = machine_type.split(' ')[-1]
+        field_name = 'CP-ZYNC-%s-%s' % (machine_type_base.upper(), renderer.upper())
+        if 'PREEMPTIBLE' in machine_type.upper():
+          field_name += '-PREEMPTIBLE'
         if (field_name in zync_conn.PRICING['gcp_price_list'] and
           'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
           text = '$%.02f' % ((num_machines * zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
