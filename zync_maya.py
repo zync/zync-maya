@@ -1261,6 +1261,7 @@ class SubmitWindow(object):
 
           layer_params = copy.deepcopy(params)
 
+          layer_params['project_dir'] = params['project']
           layer_params['output_dir'] = params['out_path']
           layer_params['use_nightly'] = params['vray_nightly']
           if ('extension' not in params['scene_info'] or
@@ -1380,6 +1381,7 @@ class SubmitWindow(object):
 
           layer_params = copy.deepcopy(params)
 
+          layer_params['project_dir'] = params['project']
           layer_params['output_dir'] = params['out_path']
 
           tail = cmds.getAttr('defaultRenderGlobals.imageFilePrefix')
