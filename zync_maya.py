@@ -25,10 +25,14 @@ import sys
 import time
 from functools import partial
 
-config_path = '%s/config_maya.py' % (os.path.dirname(__file__),)
-if not os.path.exists(config_path):
-  raise Exception('Could not locate config_maya.py, please create.')
-from config_maya import *
+if os.environ.get('ZYNC_API_DIR') and os.environ.get('ZYNC_MAYA_API_KEY'):
+  API_DIR = os.environ.get('ZYNC_API_DIR')
+  API_KEY = os.environ.get('ZYNC_MAYA_API_KEY')
+else:
+  config_path = '%s/config_maya.py' % (os.path.dirname(__file__),)
+  if not os.path.exists(config_path):
+    raise Exception('Could not locate config_maya.py, please create.')
+  from config_maya import *
 
 required_config = ['API_DIR', 'API_KEY']
 
