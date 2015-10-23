@@ -1418,7 +1418,7 @@ class SubmitWindow(object):
           layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
 
           ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, ef) +
-            '-lightLinks 1 -frameStep 1.0 -startFrame %s ' % (sf,) +
+            '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (layer_params['step'], sf) +
             '-shadowLinks 1 -cam %s' % (params['camera'],))
           maya.mel.eval(ass_cmd)
 
