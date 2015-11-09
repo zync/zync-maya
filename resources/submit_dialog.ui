@@ -78,6 +78,39 @@
           <property name="bottomMargin">
            <number>10</number>
           </property>
+          <item row="18" column="1">
+           <layout class="QHBoxLayout" name="horizontalLayout_3">
+            <item>
+             <spacer name="horizontalSpacer">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Fixed</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>80</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+            <item>
+             <widget class="QCheckBox" name="use_standalone">
+              <property name="toolTip">
+               <string>If selected, will perform a local scene export and render using the standalone version of the selected renderer.</string>
+              </property>
+              <property name="text">
+               <string>Use Standalone</string>
+              </property>
+              <property name="-v" stdset="0">
+               <string>`python &quot;cmds.submit_callb('use_standalone')&quot;`</string>
+              </property>
+             </widget>
+            </item>
+           </layout>
+          </item>
           <item row="0" column="0">
            <widget class="QLabel" name="label_2">
             <property name="maximumSize">
@@ -238,7 +271,7 @@
             </property>
            </widget>
           </item>
-          <item row="20" column="0">
+          <item row="21" column="0">
            <widget class="QLabel" name="label_9">
             <property name="font">
              <font>
@@ -253,7 +286,7 @@
             </property>
            </widget>
           </item>
-          <item row="21" column="1">
+          <item row="22" column="1">
            <widget class="QComboBox" name="camera">
             <property name="font">
              <font>
@@ -262,6 +295,27 @@
             </property>
             <property name="-ann" stdset="0">
              <string>`python &quot;cmds.submit_callb('camera')&quot;`</string>
+            </property>
+           </widget>
+          </item>
+          <item row="20" column="1">
+           <widget class="QLineEdit" name="frame_step">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>1</string>
+            </property>
+            <property name="-tx" stdset="0">
+             <string>`python &quot;cmds.submit_callb('frame_step')&quot;`</string>
             </property>
            </widget>
           </item>
@@ -280,8 +334,8 @@
             </property>
            </widget>
           </item>
-          <item row="19" column="1">
-           <widget class="QLineEdit" name="frame_step">
+          <item row="21" column="1">
+           <widget class="QLineEdit" name="chunk_size">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
               <horstretch>0</horstretch>
@@ -294,10 +348,10 @@
              </font>
             </property>
             <property name="text">
-             <string>1</string>
+             <string>10</string>
             </property>
             <property name="-tx" stdset="0">
-             <string>`python &quot;cmds.submit_callb('frame_step')&quot;`</string>
+             <string>`python &quot;cmds.submit_callb('chunk_size')&quot;`</string>
             </property>
            </widget>
           </item>
@@ -325,27 +379,6 @@
             </property>
             <property name="alignment">
              <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="20" column="1">
-           <widget class="QLineEdit" name="chunk_size">
-            <property name="sizePolicy">
-             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
-              <horstretch>0</horstretch>
-              <verstretch>0</verstretch>
-             </sizepolicy>
-            </property>
-            <property name="font">
-             <font>
-              <pointsize>10</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>10</string>
-            </property>
-            <property name="-tx" stdset="0">
-             <string>`python &quot;cmds.submit_callb('chunk_size')&quot;`</string>
             </property>
            </widget>
           </item>
@@ -442,7 +475,7 @@
             </property>
            </widget>
           </item>
-          <item row="23" column="0">
+          <item row="24" column="0">
            <widget class="QLabel" name="label_12">
             <property name="font">
              <font>
@@ -478,7 +511,7 @@
             </property>
            </widget>
           </item>
-          <item row="23" column="1">
+          <item row="24" column="1">
            <layout class="QHBoxLayout" name="horizontalLayout">
             <property name="spacing">
              <number>6</number>
@@ -606,7 +639,7 @@
             </property>
            </widget>
           </item>
-          <item row="22" column="0">
+          <item row="23" column="0">
            <widget class="QLabel" name="layers_label">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
@@ -634,7 +667,7 @@
             </property>
            </widget>
           </item>
-          <item row="21" column="0">
+          <item row="22" column="0">
            <widget class="QLabel" name="label_10">
             <property name="font">
              <font>
@@ -649,7 +682,7 @@
             </property>
            </widget>
           </item>
-          <item row="19" column="0">
+          <item row="20" column="0">
            <widget class="QLabel" name="label_8">
             <property name="font">
              <font>
@@ -746,22 +779,7 @@
             </item>
            </layout>
           </item>
-          <item row="18" column="0">
-           <widget class="QLabel" name="frange_label">
-            <property name="font">
-             <font>
-              <pointsize>10</pointsize>
-             </font>
-            </property>
-            <property name="text">
-             <string>Frame Range:</string>
-            </property>
-            <property name="alignment">
-             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-            </property>
-           </widget>
-          </item>
-          <item row="18" column="1">
+          <item row="19" column="1">
            <widget class="QLineEdit" name="frange">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -779,6 +797,21 @@
             </property>
             <property name="-tx" stdset="0">
              <string>`python &quot;cmds.submit_callb('frange')&quot;`</string>
+            </property>
+           </widget>
+          </item>
+          <item row="19" column="0">
+           <widget class="QLabel" name="frange_label">
+            <property name="font">
+             <font>
+              <pointsize>10</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Frame Range:</string>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
             </property>
            </widget>
           </item>
@@ -878,7 +911,7 @@
             </item>
            </layout>
           </item>
-          <item row="22" column="1">
+          <item row="23" column="1">
            <widget class="QListWidget" name="layers">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">

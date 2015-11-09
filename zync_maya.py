@@ -446,7 +446,7 @@ class SubmitWindow(object):
     self.ignore_plugin_errors = 0
     self.login_type = 'zync'
 
-    mi_setting = zync_conn.get_config(var='USE_MI')
+    mi_setting = zync_conn.CONFIG.get('USE_MI')
     if mi_setting in (None, '', 1, '1'):
       self.force_mi = True
     else:
@@ -510,11 +510,20 @@ class SubmitWindow(object):
     cmds.optionMenu('job_type', e=True, changeCommand=self.change_job_type)
     cmds.checkBox('distributed', e=True, changeCommand=self.distributed_toggle)
     cmds.textScrollList('layers', e=True, selectCommand=self.change_layers)
+    cmds.checkBox('use_standalone', e=True, changeCommand=self.change_standalone)
     #
     #  Call a few of those callbacks now to set initial UI state.
     #
     self.change_renderer(self.renderer)
     self.select_new_project(True)
+
+    # If Maya is enabled, show the Use Standalone option. Otherwise it's
+    # useless, so hide it.
+    self.maya_enabled = (zync_conn.CONFIG.get('MAYA_ENABLED') == '1')
+    if self.maya_enabled:
+      cmds.checkBox('use_standalone', e=True, vis=True)
+    else:
+      cmds.checkBox('use_standalone', e=True, vis=False)
 
     return name
 
@@ -529,7 +538,7 @@ class SubmitWindow(object):
       cmds.optionMenu('renderer', e=True, en=False)
       cmds.optionMenu('job_type', e=True, en=False)
       cmds.checkBox('vray_nightly', e=True, en=False)
-      #cmds.checkBox('use_standalone', e=True, en=False)
+      cmds.checkBox('use_standalone', e=True, en=False)
       cmds.textField('frange', e=True, en=False)
       cmds.textField('frame_step', e=True, en=False)
       cmds.textField('chunk_size', e=True, en=False)
@@ -546,15 +555,12 @@ class SubmitWindow(object):
       cmds.optionMenu('renderer', e=True, en=True)
       if eval_ui('renderer', type='optionMenu', v=True) in ('vray', 'V-Ray'):
         cmds.checkBox('vray_nightly', e=True, en=True)
-        #cmds.checkBox('use_standalone', e=True, en=True)
+        cmds.checkBox('use_standalone', e=True, en=True)
         cmds.checkBox('distributed', e=True, en=True)
       else:
         cmds.checkBox('vray_nightly', e=True, en=False)
         cmds.checkBox('distributed', e=True, en=False)
-      #if eval_ui('renderer', type='optionMenu', v=True) in ('mr', 'Mental Ray') and not self.force_mi:
-      #  cmds.checkBox('use_standalone', e=True, en=True)
-      #else:
-      #  cmds.checkBox('use_standalone', e=True, en=False)
+      cmds.checkBox('use_standalone', e=True, en=False)
       cmds.optionMenu('job_type', e=True, en=True)
       cmds.textField('frange', e=True, en=True)
       cmds.textField('frame_step', e=True, en=True)
@@ -565,11 +571,14 @@ class SubmitWindow(object):
       cmds.textField('y_res', e=True, en=True)
 
   def distributed_toggle(self, checked):
-    #if checked:
-    #  cmds.checkBox('use_standalone', e=True, en=False)
-    #else:
-    #  cmds.checkBox('use_standalone', e=True, en=True)
-    pass
+    """Event triggered when the Distributed Rendering control
+    is toggled.
+
+    Args:
+      checked: bool, whether the checkbox is checked
+    """
+    # if DR is on use of standalone is required
+    cmds.checkBox('use_standalone', e=True, en=checked)
 
   def change_num_instances(self, *args, **kwargs):
     self.update_est_cost()
@@ -586,9 +595,9 @@ class SubmitWindow(object):
       cmds.checkBox('vray_nightly', e=True, en=True)
       cmds.checkBox('vray_nightly', e=True, v=False)
       cmds.checkBox('distributed', e=True, en=True)
-      #cmds.checkBox('use_standalone', e=True, en=False)
-      #cmds.checkBox('use_standalone', e=True, v=True)
-      #cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
+      cmds.checkBox('use_standalone', e=True, en=True)
+      cmds.checkBox('use_standalone', e=True, v=False)
+      cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
     else:
       cmds.checkBox('vray_nightly', e=True, en=False)
       cmds.checkBox('distributed', e=True, en=False)
@@ -604,17 +613,17 @@ class SubmitWindow(object):
     if renderer in ('arnold', 'Arnold'):
       renderer_seen = True
       renderer_key = 'arnold'
-      #cmds.checkBox('use_standalone', e=True, en=False)
-      #cmds.checkBox('use_standalone', e=True, v=True)
-      #cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
+      cmds.checkBox('use_standalone', e=True, en=True)
+      cmds.checkBox('use_standalone', e=True, v=False)
+      cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
       cmds.textField('chunk_size', e=True, en=False)
     else:
       cmds.textField('chunk_size', e=True, en=True)
     # for any unknown renderer, disable standalone
-    #if renderer_seen == False:
-    #  cmds.checkBox('use_standalone', e=True, en=False)
-    #  cmds.checkBox('use_standalone', e=True, v=False)
-    #  cmds.checkBox('use_standalone', e=True, label='Use Standalone')
+    if not renderer_seen:
+      cmds.checkBox('use_standalone', e=True, en=False)
+      cmds.checkBox('use_standalone', e=True, v=False)
+      cmds.checkBox('use_standalone', e=True, label='Use Standalone')
     #
     #  job_types dropdown - remove all items for list, then allow in job types
     #  from zync_conn.JOB_SUBTYPES
@@ -640,6 +649,7 @@ class SubmitWindow(object):
     self.change_job_type(first_type)
     self.init_instance_type()
     self.update_est_cost()
+    self.change_standalone(eval_ui('use_standalone', 'checkBox', v=True))
 
   def change_job_type(self, job_type):
     job_type = job_type.lower()
@@ -684,6 +694,20 @@ class SubmitWindow(object):
     cmds.textField('x_res', e=True, tx=cmds.getAttr('%s.resolutionX' % (bake_set,)))
     cmds.textField('y_res', e=True, tx=cmds.getAttr('%s.resolutionY' % (bake_set,)))
 
+  def change_standalone(self, checked):
+    """Event triggered when the Use Standalone control is toggled.
+
+    Args:
+      checked: bool, whether the checkbox is checked
+    """
+    current_renderer = eval_ui('renderer', type='optionMenu', v=True).lower()
+    # if using arnold standalone, disable chunk size. arnold stores info
+    # one-frame-per-file so chunk size is not applicable.
+    if current_renderer == 'arnold' and checked:
+      cmds.textField('chunk_size', e=True, en=False)
+    else:
+      cmds.textField('chunk_size', e=True, en=True)
+
   def select_new_project(self, selected):
     if selected:
       cmds.textField('new_project_name', e=True, en=True)
@@ -702,7 +726,6 @@ class SubmitWindow(object):
     This function currently does nothing. Before Maya Binary was supported
     it checked to ensure no .mb files were being used.
     """
-
     #for ref in cmds.file(q=True, r=True):
     #   if check_failed:
     #     raise Exception(msg)
@@ -800,37 +823,24 @@ class SubmitWindow(object):
     params['camera'] = eval_ui('camera', 'optionMenu', v=True)
     params['xres'] = int(eval_ui('x_res', text=True))
     params['yres'] = int(eval_ui('y_res', text=True))
+    params['use_standalone'] = 0
 
     if params['upload_only'] == 0 and params['renderer'] == 'vray':
       params['vray_nightly'] = int(eval_ui('vray_nightly', 'checkBox', v=True))
-      #params['use_vrscene'] = int(eval_ui('use_standalone', 'checkBox', v=True))
-      params['use_vrscene'] = 0
-      if params['use_vrscene'] == 1 and params['job_subtype'] == 'bake':
+      if params['use_standalone'] == 1 and params['job_subtype'] == 'bake':
         cmds.error('Vray Standalone is not currently supported for Bake jobs.')
       params['distributed'] = int(eval_ui('distributed', 'checkBox', v=True))
       if params['distributed'] == 1 and params['job_subtype'] == 'bake':
         cmds.error('Distributed Rendering is not currently supported for Bake jobs.')
-      params['use_mi'] = 0
-      params['use_ass'] = 0
     elif params['upload_only'] == 0 and params['renderer'] == 'mr':
       params['vray_nightly'] = 0
-      params['use_vrscene'] = 0
       params['distributed'] = 0
-      #params['use_mi'] = int(eval_ui('use_standalone', 'checkBox', v=True))
-      params['use_mi'] = 0
-      params['use_ass'] = 0
     elif params['upload_only'] == 0 and params['renderer'] == 'arnold':
       params['vray_nightly'] = 0
-      params['use_vrscene'] = 0
       params['distributed'] = 0
-      params['use_mi'] = 0
-      #params['use_ass'] = int(eval_ui('use_standalone', 'checkBox', v=True))
-      params['use_ass'] = 0
     else:
       params['vray_nightly'] = 0
-      params['use_vrscene'] = 0
       params['distributed'] = 0
-      params['use_mi'] = 0
 
     if params['upload_only'] == 1:
       params['layers'] = None
@@ -1237,17 +1247,8 @@ class SubmitWindow(object):
         raise MayaZyncException('Zync username authentication failed.')
 
     try:
-      if params['renderer'] == 'vray':
-        print 'Vray job, collecting additional info...'
-
-        cmds.undoInfo(openChunk=True)
-
-        scene_head, extension = os.path.splitext(scene_path)
-        scene_name = os.path.basename(scene_head)
-        vrscene_path = '%s.vrscene' % (scene_head,)
-        vrscene_path_job = zync_conn.generate_file_path(vrscene_path)
-        vrscene_path_job = vrscene_path_job.replace('\\', '/')
-
+      if (not window.maya_enabled or
+          eval_ui('use_standalone', 'checkBox', v=True)):
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
 
@@ -1258,175 +1259,44 @@ class SubmitWindow(object):
           layer_list = params['layers'].split(',')
           ef = int(frange_split[-1].split('-')[-1])
 
-        print 'Exporting .vrscene files...'
-        for layer in layer_list:
-          print 'Exporting layer %s...' % (layer,)
-          cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+        if params['renderer'] == 'vray':
+          print 'Vray job, collecting additional info...'
 
-          layer_params = copy.deepcopy(params)
+          vrscene_path = window.get_standalone_scene_path('vrscene')
 
-          layer_params['project_dir'] = params['project']
-          layer_params['output_dir'] = params['out_path']
-          layer_params['use_nightly'] = params['vray_nightly']
-          if ('extension' not in params['scene_info'] or
-            params['scene_info']['extension'] == None or
-            params['scene_info']['extension'].strip() == ''):
-            layer_params['scene_info']['extension'] = 'png'
+          print 'Exporting .vrscene files...'
+          for layer in layer_list:
+            print 'Exporting layer %s...' % (layer,)
+            possible_scene_names, layer_params = window.export_vrscene(
+                vrscene_path, layer, params, sf, ef)
 
-          tail = cmds.getAttr('vraySettings.fileNamePrefix')
-          if tail in (None, ''):
-            tail = scene_name
-          else:
-            tail = tail.replace('%s', scene_name)
-            tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
-            clean_camera = params['camera'].replace(':', '_')
-            tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
-              flags=re.IGNORECASE)
-            tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
-          if tail[-1] != '.':
-            tail += '.'
+            layer_file = None
+            for possible_scene_name in possible_scene_names:
+              if os.path.exists(possible_scene_name):
+                layer_file = possible_scene_name
+                break
+            if layer_file is None:
+              raise zync.ZyncError('the .vrscene file generated by the Zync Maya plugin '
+                                   'was not found. Unable to submit job.')
 
-          layer_params['output_filename'] = '%s.%s' % (
-            tail, layer_params['scene_info']['extension'])
-          layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
+            print 'Submitting job for layer %s...' % (layer,)
+            zync_conn.submit_job('vray', layer_file, params=layer_params)
 
-          # Set up render globals for vray export. These changes will
-          # be reverted later when we run cmds.undo().
-          #
-          # Turn "Don't save image" OFF - this will ensure Vray knows to translate
-          # all render output settings.
-          cmds.setAttr('vraySettings.dontSaveImage', 0)
-          # Turn rendering off.
-          cmds.setAttr('vraySettings.vrscene_render_on', 0)
-          # Turn Vrscene export on.
-          cmds.setAttr('vraySettings.vrscene_on', 1)
-          # Set the Vrscene export filename.
-          cmds.setAttr('vraySettings.vrscene_filename', vrscene_path_job, type='string')
-          # Ensure we export only a single file.
-          cmds.setAttr('vraySettings.misc_separateFiles', 0)
-          cmds.setAttr('vraySettings.misc_eachFrameInFile', 0)
-          # Set compression options.
-          cmds.setAttr('vraySettings.misc_meshAsHex', 1)
-          cmds.setAttr('vraySettings.misc_transformAsHex', 1)
-          cmds.setAttr('vraySettings.misc_compressedVrscene', 1)
-          # Turn the VFB off, make sure the viewer is hidden.
-          cmds.setAttr('vraySettings.vfbOn', 0)
-          cmds.setAttr('vraySettings.hideRVOn', 1)
-          # Ensure animation is fully enabled and configured with the correct
-          # frame range. This is usually the case already, but some users will
-          # have it disabled expecting their existing local farm to update
-          # with the correct settings.
-          cmds.setAttr('vraySettings.animBatchOnly', 0)
-          cmds.setAttr('defaultRenderGlobals.animation', 1)
-          cmds.setAttr('defaultRenderGlobals.startFrame', sf)
-          cmds.setAttr('defaultRenderGlobals.endFrame', ef)
+        elif params['renderer'] == 'arnold':
+          print 'Arnold job, collecting additional info...'
 
-          # Run the export.
-          maya.mel.eval('vrend -camera "%s" -layer "%s"' % (params['camera'], layer))
+          ass_path = window.get_standalone_scene_path('ass')
 
-          vrscene_base, ext = os.path.splitext(vrscene_path_job)
-          if layer == 'defaultRenderLayer':
-            possible_scene_names = [
-              '%s_masterLayer%s' % (vrscene_base, ext),
-              '%s%s' % (vrscene_base, ext),
-              '%s_defaultRenderLayer%s' % (vrscene_base, ext)
-            ]
-          else:
-            possible_scene_names = [
-              '%s_%s%s' % (vrscene_base, layer, ext)
-            ]
+          print 'Exporting .ass files...'
+          for layer in layer_list:
+            print 'Exporting layer %s...' % (layer,)
+            layer_file_wildcard, layer_params = window.export_ass(ass_path, 
+                layer, params, sf, ef)
+            print 'Submitting job for layer %s...' % (layer,)
+            zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
 
-          layer_file = None
-          for possible_scene_name in possible_scene_names:
-            if os.path.exists(possible_scene_name):
-              layer_file = possible_scene_name
-              break
-          if layer_file is None:
-            raise zync.ZyncError('the .vrscene file generated by the Zync Maya plugin '
-                                 'was not found. Unable to submit job.')
-
-          print 'Submitting job for layer %s...' % (layer,)
-          zync_conn.submit_job('vray', layer_file, params=layer_params)
-
-        cmds.undoInfo(closeChunk=True)
-        cmds.undo()
-
-        cmds.confirmDialog(title='Success',
-          message='{num_jobs} {label} submitted to Zync.'.format(
-            num_jobs=len(layer_list),
-            label='job' if len(layer_list) == 1 else 'jobs'),
-          button='OK', defaultButton='OK')
-
-      elif params['renderer'] == 'arnold':
-        print 'Arnold job, collecting additional info...'
-
-        cmds.undoInfo(openChunk=True)
-
-        scene_head, extension = os.path.splitext(scene_path)
-        scene_name = os.path.basename(scene_head)
-        ass_path = '%s.ass' % (scene_head,)
-        ass_path_job = zync_conn.generate_file_path(ass_path)
-        ass_path_job = ass_path_job.replace('\\', '/')
-
-        frange_split = params['frange'].split(',')
-        sf = int(frange_split[0].split('-')[0])
-
-        if params['upload_only'] == 1:
-          layer_list = ['defaultRenderLayer']
-          ef = sf
         else:
-          layer_list = params['layers'].split(',')
-          ef = int(frange_split[-1].split('-')[-1])
-
-        print 'Exporting .ass files...'
-        for layer in layer_list:
-          print 'Exporting layer %s...' % (layer,)
-          cmds.editRenderLayerGlobals(currentRenderLayer=layer)
-
-          layer_params = copy.deepcopy(params)
-
-          layer_params['project_dir'] = params['project']
-          layer_params['output_dir'] = params['out_path']
-
-          tail = cmds.getAttr('defaultRenderGlobals.imageFilePrefix')
-          if tail in (None, ''):
-            tail = scene_name
-          else:
-            tail = tail.replace('%s', scene_name)
-            tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
-            clean_camera = params['camera'].replace(':', '_')
-            tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
-              flags=re.IGNORECASE)
-            tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
-            try:
-              render_version = cmds.getAttr('defaultRenderGlobals.renderVersion')
-              if render_version != None:
-                tail = re.sub('%v|<version>',
-                  cmds.getAttr('defaultRenderGlobals.renderVersion'),
-                  tail, flags=re.IGNORECASE)
-            except ValueError:
-              pass
-          if tail[-1] != '.':
-            tail += '.'
-
-          layer_params['output_filename'] = '%s.%s' % (
-            tail, params['scene_info']['extension'])
-          layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
-
-          ass_base, ext = os.path.splitext(ass_path_job)
-          layer_file = '%s_%s%s' % (ass_base, layer, ext)
-          layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
-
-          ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, ef) +
-            '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (layer_params['step'], sf) +
-            '-shadowLinks 1 -cam %s' % (params['camera'],))
-          maya.mel.eval(ass_cmd)
-
-          print 'Submitting job for layer %s...' % (layer,)
-          zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
-
-        cmds.undoInfo(closeChunk=True)
-        cmds.undo()
+          raise MayaZyncException('Renderer %s unsupported for standalone rendering.' % params['renderer'])
 
         cmds.confirmDialog(title='Success',
           message='{num_jobs} {label} submitted to Zync.'.format(
@@ -1461,6 +1331,192 @@ class SubmitWindow(object):
 
     else:
       print 'Done.'
+
+  @staticmethod
+  def export_vrscene(vrscene_path, layer, render_params, start_frame, end_frame):
+    """Export a .vrscene of the current scene.
+
+    Args:
+      vrscene_path: str, path to which to export the .vrscene. A layer name will
+                    be inserted into the filename.
+      layer: str, the name of the render layer to export
+      render_params: dict, render job parameters
+      start_frame: int, the first frame to export
+      end_frame: int, the last frame to export
+
+    Returns:
+      tuple:
+        - list of possible locations where the .vrscene may be found (Vray adds
+          layer names automatically and is sometimes inconsistent)
+        - dict of render job parameters, with any modifications to make the
+          job run similarly with Vray standalone.
+    """
+    cmds.undoInfo(openChunk=True)
+
+    cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+
+    scene_path = cmds.file(q=True, loc=True)
+    scene_head, extension = os.path.splitext(scene_path)
+    scene_name = os.path.basename(scene_head)
+
+    layer_params = copy.deepcopy(render_params)
+
+    layer_params['project_dir'] = render_params['project']
+    layer_params['output_dir'] = render_params['out_path']
+    layer_params['use_nightly'] = render_params['vray_nightly']
+    if ('extension' not in render_params['scene_info'] or
+      render_params['scene_info']['extension'] == None or
+      render_params['scene_info']['extension'].strip() == ''):
+      layer_params['scene_info']['extension'] = 'png'
+
+    tail = cmds.getAttr('vraySettings.fileNamePrefix')
+    if not tail:
+      tail = scene_name
+    else:
+      tail = tail.replace('%s', scene_name)
+      tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
+      clean_camera = layer_params['camera'].replace(':', '_')
+      tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
+        flags=re.IGNORECASE)
+      tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+    if tail[-1] != '.':
+      tail += '.'
+
+    layer_params['output_filename'] = '%s.%s' % (
+      tail, layer_params['scene_info']['extension'])
+    layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
+
+    # Set up render globals for vray export. These changes will
+    # be reverted later when we run cmds.undo().
+    #
+    # Turn "Don't save image" OFF - this will ensure Vray knows to translate
+    # all render output settings.
+    cmds.setAttr('vraySettings.dontSaveImage', 0)
+    # Turn rendering off.
+    cmds.setAttr('vraySettings.vrscene_render_on', 0)
+    # Turn Vrscene export on.
+    cmds.setAttr('vraySettings.vrscene_on', 1)
+    # Set the Vrscene export filename.
+    cmds.setAttr('vraySettings.vrscene_filename', vrscene_path, type='string')
+    # Ensure we export only a single file.
+    cmds.setAttr('vraySettings.misc_separateFiles', 0)
+    cmds.setAttr('vraySettings.misc_eachFrameInFile', 0)
+    # Set compression options.
+    cmds.setAttr('vraySettings.misc_meshAsHex', 1)
+    cmds.setAttr('vraySettings.misc_transformAsHex', 1)
+    cmds.setAttr('vraySettings.misc_compressedVrscene', 1)
+    # Turn the VFB off, make sure the viewer is hidden.
+    cmds.setAttr('vraySettings.vfbOn', 0)
+    cmds.setAttr('vraySettings.hideRVOn', 1)
+    # Ensure animation is fully enabled and configured with the correct
+    # frame range. This is usually the case already, but some users will
+    # have it disabled expecting their existing local farm to update
+    # with the correct settings.
+    cmds.setAttr('vraySettings.animBatchOnly', 0)
+    cmds.setAttr('defaultRenderGlobals.animation', 1)
+    cmds.setAttr('defaultRenderGlobals.startFrame', start_frame)
+    cmds.setAttr('defaultRenderGlobals.endFrame', end_frame)
+
+    # Run the export.
+    maya.mel.eval('vrend -camera "%s" -layer "%s"' % (layer_params['camera'], layer))
+
+    cmds.undoInfo(closeChunk=True)
+    cmds.undo()
+
+    vrscene_base, ext = os.path.splitext(vrscene_path)
+    if layer == 'defaultRenderLayer':
+      possible_scene_names = [
+        '%s_masterLayer%s' % (vrscene_base, ext),
+        '%s%s' % (vrscene_base, ext),
+        '%s_defaultRenderLayer%s' % (vrscene_base, ext)
+      ]
+    else:
+      possible_scene_names = [
+        '%s_%s%s' % (vrscene_base, layer, ext)
+      ]
+
+    return possible_scene_names, layer_params
+
+  @staticmethod
+  def export_ass(ass_path, layer, render_params, start_frame, end_frame): 
+    """Export .ass files of the current scene.
+
+    Args:
+      ass_path: str, path to which to export the .ass files
+      layer: str, the name of the render layer to export
+      render_params: dict, render job parameters
+      start_frame: int, the first frame to export
+      end_frame: int, the last frame to export
+
+    Returns:
+      tuple:
+        - str path to the final export location. will contain a wildcard in
+          place of frame number, to indicate the set of files produced.
+        - dict of render job parameters, with any modifications to make the
+          job run similarly with Arnold standalone.
+    """
+    cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+
+    layer_params = copy.deepcopy(render_params)
+
+    layer_params['project_dir'] = render_params['project']
+    layer_params['output_dir'] = render_params['out_path']
+
+    tail = cmds.getAttr('defaultRenderGlobals.imageFilePrefix')
+    if not tail:
+      tail = scene_name
+    else:
+      tail = tail.replace('%s', scene_name)
+      tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
+      clean_camera = render_params['camera'].replace(':', '_')
+      tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
+        flags=re.IGNORECASE)
+      tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+      try:
+        render_version = cmds.getAttr('defaultRenderGlobals.renderVersion')
+        if render_version != None:
+          tail = re.sub('%v|<version>',
+            cmds.getAttr('defaultRenderGlobals.renderVersion'),
+            tail, flags=re.IGNORECASE)
+      except ValueError:
+        pass
+    if tail[-1] != '.':
+      tail += '.'
+
+    layer_params['output_filename'] = '%s.%s' % (
+      tail, render_params['scene_info']['extension'])
+    layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
+
+    ass_base, ext = os.path.splitext(ass_path)
+    layer_file = '%s_%s%s' % (ass_base, layer, ext)
+    layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
+
+    ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, end_frame) +
+      '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (layer_params['step'], sf) +
+      '-shadowLinks 1 -cam %s' % (render_params['camera'],))
+    maya.mel.eval(ass_cmd)
+
+    return layer_file_wildcard, layer_params
+
+  @staticmethod
+  def get_standalone_scene_path(suffix):
+    """Get a file path for exporting a standalone scene, based on current scene
+    and matching the Zync convention of where these files should be stored.
+
+    This does NOT perform the actual export, only returns the path at which
+    it should be stored.
+
+    Args:
+      suffix: str, the suffix of the filename e.g. "vrscene" or "ass"
+
+    Returns:
+      str the standalone scene file path
+    """
+    scene_path = cmds.file(q=True, loc=True)
+    scene_head, _ = os.path.splitext(scene_path)
+    scene_name = os.path.basename(scene_head)
+    return zync_conn.generate_file_path(
+        '%s.%s' % (scene_head, suffix)).replace('\\', '/')
 
 def submit_dialog():
   submit_window = SubmitWindow()
