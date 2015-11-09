@@ -23,6 +23,7 @@ import re
 import string
 import sys
 import time
+import webbrowser
 from functools import partial
 
 if os.environ.get('ZYNC_API_DIR') and os.environ.get('ZYNC_MAYA_API_KEY'):
@@ -1316,6 +1317,10 @@ class SubmitWindow(object):
         cmds.file(rename=original_path)
         cmds.file(modified=original_modified)
         '''
+
+        if not window.verify_eula_acceptance(zync_conn):
+          cmds.error('Job submission canceled.')
+
         zync_conn.submit_job('maya', scene_path, params=params)
         cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
           button='OK', defaultButton='OK')
@@ -1517,6 +1522,44 @@ class SubmitWindow(object):
     scene_name = os.path.basename(scene_head)
     return zync_conn.generate_file_path(
         '%s.%s' % (scene_head, suffix)).replace('\\', '/')
+
+  @staticmethod
+  def verify_eula_acceptance(zync_conn):
+    """Verify Autodesk EULA acceptance and if needed perform acceptance flow.
+
+    Args:
+      zync_conn: zync.Zync, connection to Zync
+
+    Returns:
+      bool, True if EULA is accepted, False if user declined
+    """
+    # find the Maya EULA
+    maya_eula = None
+    for eula in zync_conn.get_eulas():
+      if eula.get('eula_kind').lower() == 'mayaio':
+        maya_eula = eula
+        break
+    # blank accepted_by field indicates not yet accepted
+    if maya_eula and not maya_eula.get('accepted_by'):
+      eula_url = '%s/account#legal' % zync_conn.url
+      # let the user know what's about to happen
+      cmds.confirmDialog(title='Accept EULA', message=('In order to launch ' +
+                         'Maya jobs you must accept the Autodesk EULA. It ' +
+                         'looks like you haven\'t accepted this yet.\n\nA ' +
+                         'browser window will open so you can do this, then ' +
+                         'you\'ll be able to submit your job.\n\nURL: ' +
+                         eula_url), button=['OK'], defaultButton='OK')
+      # open page in browser
+      webbrowser.open(eula_url)
+      # wait for user to let us know they've responded
+      eula_response = cmds.confirmDialog(title='Accept EULA', message=('Have ' +
+          'you accepted the EULA?'), button=['Yes', 'No'], defaultButton='Yes',
+          cancelButton='No', dismissString='No')
+
+      if eula_response == 'No':
+        return False
+
+    return True
 
 def submit_dialog():
   submit_window = SubmitWindow()
