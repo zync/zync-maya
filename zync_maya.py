@@ -1460,7 +1460,13 @@ class SubmitWindow(object):
         - dict of render job parameters, with any modifications to make the
           job run similarly with Arnold standalone.
     """
+    cmds.undoInfo(openChunk=True)
+
     cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+
+    scene_path = cmds.file(q=True, loc=True)
+    scene_head, extension = os.path.splitext(scene_path)
+    scene_name = os.path.basename(scene_head)
 
     layer_params = copy.deepcopy(render_params)
 
@@ -1497,9 +1503,12 @@ class SubmitWindow(object):
     layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
 
     ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, end_frame) +
-      '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (layer_params['step'], sf) +
+      '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (layer_params['step'], start_frame) +
       '-shadowLinks 1 -cam %s' % (render_params['camera'],))
     maya.mel.eval(ass_cmd)
+
+    cmds.undoInfo(closeChunk=True)
+    cmds.undo()
 
     return layer_file_wildcard, layer_params
 
