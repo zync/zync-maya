@@ -47,9 +47,19 @@ zync_conn = zync.Zync('maya_plugin', API_KEY, application='maya')
 
 UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
+_XGEN_IMPORT_ERROR = None
+
 import maya.cmds as cmds
 import maya.mel
 import maya.utils
+# Attempt to import Xgen API. Log error on failure but continue, in
+# case of older Maya version or if Xgen is simply unavailable for
+# some reason.
+try:
+  import xgenm
+except ImportError as e:
+  _XGEN_IMPORT_ERROR = str(e)
+  print 'Error loading Xgen API: %s' % _XGEN_IMPORT_ERROR
 
 def eval_ui(path, type='textField', **kwargs):
   """
@@ -309,6 +319,102 @@ def get_scene_files():
         for scene_file in files:
           if scene_file != None:
             yield scene_file.replace('\\', '/')
+
+  try:
+    for xgen_file in get_xgen_files():
+      yield xgen_file
+  except NameError as e:
+    print 'error retrieving Xgen file list: %s' % str(e)
+
+def get_xgen_files():
+  """Yield all Xgen file dependencies in the scene."""
+  # Get collection list, if the call fails due to Xgen not being
+  # loaded, stop.
+  if _XGEN_IMPORT_ERROR:
+    raise NameError('Xgen is not loaded due to error: %s' % _XGEN_IMPORT_ERROR)
+  collection_list = xgenm.palettes()
+  for collection in collection_list:
+    for def_file in _get_xgen_collection_definition(collection):
+      yield def_file
+    for xgen_file in _get_xgen_collection_files(collection):
+      yield xgen_file
+
+def _get_xgen_collection_definition(collection_name):
+  """Yield Xgen collection direct dependencies.
+
+  Args:
+    collection_name: str, name of Xgen collection in the current scene
+
+  Returns:
+    Yields str for each definition files associated with that collection.
+  """
+  if _XGEN_IMPORT_ERROR:
+    raise NameError('Xgen is not loaded due to error: %s' % _XGEN_IMPORT_ERROR)
+  scene_dir, scene_basename = os.path.split(cmds.file(q=True, loc=True))
+  scene_name, _ = os.path.splitext(scene_basename)
+  # Xgen definition files must meet very specific conventions - they
+  # must live in the same directory as the scene file and be named
+  # according to a strict <scene name>__<collection name> format.
+  # These are Xgen conventions, not specific to Zync.
+  filenames = [
+    '%s__%s.xgen' % (scene_name, collection_name),
+    '%s__%s.abc' % (scene_name, collection_name),
+  ]
+  for filename in filenames:
+    yield os.path.join(scene_dir, filename)
+
+def _get_xgen_collection_files(collection_name):
+  """Get Xgen indirect dependencies, specifically files stored
+  in related objects."""
+  if _XGEN_IMPORT_ERROR:
+    raise NameError('Xgen is not loaded due to error: %s' % _XGEN_IMPORT_ERROR)
+  xg_proj_path = xgenm.getAttr('xgProjectPath', collection_name)
+  xg_data_path = xgenm.getAttr('xgDataPath', collection_name)
+  xg_data_path = xg_data_path.replace('${PROJECT}', xg_proj_path)
+  # upload all files under collection root
+  for dir_name, subdir_list, file_list in os.walk(xg_data_path):
+    for xg_file in file_list:
+      if not xg_file.startswith('.'):
+        yield os.path.join(dir_name, xg_file)
+  # search objects for files too
+  for xg_desc in xgenm.descriptions(collection_name):
+    for xg_obj in xgenm.objects(collection_name, xg_desc):
+      for xg_file in _get_xgen_object_files(collection_name, xg_desc, xg_obj):
+        yield xg_file
+
+def _get_xgen_object_files(collection_name, desc_name, object_name):
+  """Get all files linked to an Xgen object."""
+  if _XGEN_IMPORT_ERROR:
+    raise NameError('Xgen is not loaded due to error: %s' % _XGEN_IMPORT_ERROR)
+  # Assume we only care if the object has a "files" attribute.
+  if xgenm.attrExists('files', collection_name, desc_name, object_name):
+    xg_proj_path = xgenm.getAttr('xgProjectPath', collection_name)
+    # files attr has a rather strange format, which we must parse and attempt
+    # to infer file paths from. For example:
+    # #ArchiveGroup 0 name="stalagmite" thumbnail="stalagmite.png" description="No description." \
+    #   materials="${PROJECT}/xgen/archives/materials/stalagmite.ma" color=[1.0,0.0,0.0]\n0 \
+    #   "${PROJECT}/xgen/archives/abc/stalagmite.abc"
+    for attr in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+',
+        xgenm.getAttr('files', collection_name, desc_name, object_name)):
+      attr_split = attr.split('=')
+      current_file = None
+      if not attr_split:
+        pass
+      # Look for something that looks like a file path
+      elif len(attr_split) < 2 and (os.sep in attr or '/' in attr):
+        current_file = attr.strip('"').replace('${PROJECT}', xg_proj_path)
+      # Also catch materials= tags.
+      elif attr_split[0] == 'materials':
+        current_file = attr_split[1].strip('"').replace('${PROJECT}', xg_proj_path)
+      if current_file:
+        yield current_file
+        # If the file is a .gz archive, look for a toc file as well. Arnold archives
+        # in particular often require this.
+        if current_file.endswith('.gz'):
+          head, _ = os.path.splitext(current_file)
+          toc_path = head + 'toc'
+          if os.path.exists(toc_path):
+            yield toc_path
 
 def get_default_extension(renderer):
   """
