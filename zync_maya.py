@@ -361,7 +361,7 @@ def _get_xgen_collection_definition(collection_name):
     '%s__%s.abc' % (scene_name, collection_name),
   ]
   for filename in filenames:
-    yield os.path.join(scene_dir, filename)
+    yield os.path.join(scene_dir, filename).replace('\\', '/')
 
 def _get_xgen_collection_files(collection_name):
   """Get Xgen indirect dependencies, specifically files stored
@@ -375,7 +375,7 @@ def _get_xgen_collection_files(collection_name):
   for dir_name, subdir_list, file_list in os.walk(xg_data_path):
     for xg_file in file_list:
       if not xg_file.startswith('.'):
-        yield os.path.join(dir_name, xg_file)
+        yield os.path.join(dir_name, xg_file).replace('\\', '/')
   # search objects for files too
   for xg_desc in xgenm.descriptions(collection_name):
     for xg_obj in xgenm.objects(collection_name, xg_desc):
