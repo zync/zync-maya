@@ -624,9 +624,9 @@ class SubmitWindow(object):
     self.change_renderer(self.renderer)
     self.select_new_project(True)
 
-    # If Maya is enabled, show the Use Standalone option. Otherwise it's
-    # useless, so hide it.
-    self.maya_enabled = (zync_conn.CONFIG.get('MAYA_ENABLED') == '1')
+    # Maya 2016 and up will use Maya IO by default. Otherwise default to
+    # launch a standalone job.
+    self.maya_enabled = (int(get_maya_version()) >= 2016)
     if self.maya_enabled:
       cmds.checkBox('use_standalone', e=True, vis=True)
     else:
