@@ -1397,7 +1397,7 @@ class SubmitWindow(object):
           print 'Exporting .ass files...'
           for layer in layer_list:
             print 'Exporting layer %s...' % (layer,)
-            layer_file_wildcard, layer_params = window.export_ass(ass_path, 
+            layer_file_wildcard, layer_params = window.export_ass(ass_path,
                 layer, params, sf, ef)
             print 'Submitting job for layer %s...' % (layer,)
             zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
@@ -1512,6 +1512,15 @@ class SubmitWindow(object):
     # Ensure we export only a single file.
     cmds.setAttr('vraySettings.misc_separateFiles', 0)
     cmds.setAttr('vraySettings.misc_eachFrameInFile', 0)
+
+    # Turn off Geom Cache. If you render a frame locally with this on, and then
+    # immediately export to zync, the cached geometry is written to the file.
+    # Any geo that has deformations are only rendered in the cached state and
+    # not updated per frame. This is an issue with Vray and using 'vrend' instead
+    # of BatchRender to export the vrscene.
+    cmds.setAttr('vraySettings.globopt_cache_geom_plugins', 0)
+    cmds.setAttr('vraySettings.globopt_cache_bitmaps', 0)
+
     # Set compression options.
     cmds.setAttr('vraySettings.misc_meshAsHex', 1)
     cmds.setAttr('vraySettings.misc_transformAsHex', 1)
@@ -1549,7 +1558,7 @@ class SubmitWindow(object):
     return possible_scene_names, layer_params
 
   @staticmethod
-  def export_ass(ass_path, layer, render_params, start_frame, end_frame): 
+  def export_ass(ass_path, layer, render_params, start_frame, end_frame):
     """Export .ass files of the current scene.
 
     Args:
@@ -1679,4 +1688,3 @@ class SubmitWindow(object):
 def submit_dialog():
   submit_window = SubmitWindow()
   submit_window.show()
-
