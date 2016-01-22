@@ -19,7 +19,7 @@
   <property name="maximumSize">
    <size>
     <width>550</width>
-    <height>1040</height>
+    <height>1070</height>
    </size>
   </property>
   <property name="windowTitle">
@@ -40,13 +40,13 @@
         <x>0</x>
         <y>0</y>
         <width>509</width>
-        <height>1000</height>
+        <height>1030</height>
        </rect>
       </property>
       <property name="minimumSize">
        <size>
         <width>493</width>
-        <height>1000</height>
+        <height>1030</height>
        </size>
       </property>
       <widget class="QWidget" name="layoutWidget">
@@ -55,7 +55,7 @@
          <x>0</x>
          <y>0</y>
          <width>480</width>
-         <height>1000</height>
+         <height>1020</height>
         </rect>
        </property>
        <property name="font">
@@ -1018,120 +1018,65 @@
          </widget>
         </item>
         <item>
-         <layout class="QGridLayout" name="gridLayout_4">
+         <layout class="QGridLayout" name="login_layout">
           <item row="0" column="0">
-           <layout class="QGridLayout" name="gridLayout_2">
-            <item row="0" column="1">
-             <widget class="QLineEdit" name="username">
-              <property name="text">
-               <string/>
-              </property>
-              <property name="-tx" stdset="0">
-               <string>`python &quot;cmds.submit_callb('username')&quot;`</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="label_14">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>Password:</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="1">
-             <widget class="QLineEdit" name="password">
-              <property name="inputMask">
-               <string notr="true"/>
-              </property>
-              <property name="text">
-               <string/>
-              </property>
-              <property name="echoMode">
-               <enum>QLineEdit::Password</enum>
-              </property>
-              <property name="-tx" stdset="0">
-               <string>`python &quot;cmds.submit_callb('password')&quot;`</string>
-              </property>
-             </widget>
-            </item>
-            <item row="0" column="0">
-             <widget class="QLabel" name="label_13">
-              <property name="font">
-               <font>
-                <pointsize>10</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>Username:</string>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
-              </property>
-             </widget>
-            </item>
-           </layout>
-          </item>
-          <item row="0" column="1">
-           <widget class="QLabel" name="label">
+           <widget class="QPushButton" name="login_with_google_button">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="font">
+             <font>
+              <family>Lucida Grande</family>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
             <property name="text">
-             <string>or</string>
+             <string>Login With Google</string>
+            </property>
+            <property name="+command" stdset="0">
+             <string>&quot;cmds.login_with_google_callb()&quot;</string>
             </property>
            </widget>
           </item>
-          <item row="0" column="2">
-           <layout class="QGridLayout" name="gridLayout_6">
-            <item row="0" column="0">
-             <widget class="QPushButton" name="login_with_google_button">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="MinimumExpanding" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="font">
-               <font>
-                <family>Lucida Grande</family>
-                <pointsize>12</pointsize>
-               </font>
-              </property>
-              <property name="text">
-               <string>Login With Google</string>
-              </property>
-              <property name="+command" stdset="0">
-               <string>&quot;cmds.login_with_google_callb()&quot;</string>
-              </property>
-             </widget>
-            </item>
-            <item row="1" column="0">
-             <widget class="QLabel" name="google_login_status">
-              <property name="sizePolicy">
-               <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
-                <horstretch>0</horstretch>
-                <verstretch>0</verstretch>
-               </sizepolicy>
-              </property>
-              <property name="text">
-               <string/>
-              </property>
-              <property name="alignment">
-               <set>Qt::AlignCenter</set>
-              </property>
-             </widget>
-            </item>
-           </layout>
+          <item row="2" column="0">
+           <widget class="QLabel" name="google_login_status">
+            <property name="sizePolicy">
+             <sizepolicy hsizetype="Expanding" vsizetype="Fixed">
+              <horstretch>0</horstretch>
+              <verstretch>0</verstretch>
+             </sizepolicy>
+            </property>
+            <property name="text">
+             <string/>
+            </property>
+            <property name="alignment">
+             <set>Qt::AlignCenter</set>
+            </property>
+           </widget>
+          </item>
+          <item row="1" column="0">
+           <widget class="QPushButton" name="logout_button">
+            <property name="font">
+             <font>
+              <family>Lucida Grande</family>
+              <pointsize>12</pointsize>
+             </font>
+            </property>
+            <property name="text">
+             <string>Logout</string>
+            </property>
+            <property name="+command" stdset="0">
+             <string>&quot;cmds.logout_callb()&quot;</string>
+            </property>
+           </widget>
           </item>
          </layout>
         </item>
         <item>
-         <layout class="QHBoxLayout" name="horizontalLayout_2">
+         <layout class="QHBoxLayout" name="submit_layout">
           <property name="leftMargin">
            <number>0</number>
           </property>
@@ -1193,8 +1138,6 @@
   <tabstop>layers</tabstop>
   <tabstop>x_res</tabstop>
   <tabstop>y_res</tabstop>
-  <tabstop>username</tabstop>
-  <tabstop>password</tabstop>
   <tabstop>submit_button</tabstop>
  </tabstops>
  <resources/>

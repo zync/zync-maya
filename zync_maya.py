@@ -565,9 +565,6 @@ class SubmitWindow(object):
     self.init_layers()
     self.init_bake()
 
-    self.username = ''
-    self.password = ''
-
     self.name = self.loadUI(UI_FILE)
 
     self.check_references()
@@ -576,22 +573,25 @@ class SubmitWindow(object):
     """
     Loads the UI and does post-load commands.
     """
+    # Create some new functions. These functions are called by UI elements in
+    # resources/submit_dialog.ui. Each UI element in that file uses these
+    # functions to query this window Object for its initial value.
     #
-    #  Create two new functions, cmds.submit_callb() and cmds.do_submit_callb().
-    #  These functions are called by UI elements in resources/submit_dialog.ui.
-    #  Each UI element in that file uses these functions to query this Object
-    #  for its initial value.
+    # For example, the "frange" textbox calls cmds.submit_callb('frange'),
+    # which causes its value to be set to whatever the value of self.frange
+    # is currently set to.
     #
-    #  For example, the "frange" textbox calls cmds.submit_callb('frange'),
-    #  which causes its value to be set to whatever the value of self.frange
-    #  is currently set to.
+    # Initial values can also be function based. For example, the "renderer"
+    # dropdown calls cmds.submit_callb('renderer'), which in turn triggers
+    # self.init_renderer().
     #
-    #  Initial values can also be function based. For example, the "renderer" dropdown
-    #  calls cmds.submit_callb('renderer'), which in turn triggers self.init_renderer().
-    #
+    # The UI doesn't have a reference to this window Object, but it does have
+    # access to the Maya API. So we monkey patch these new functions into the
+    # API so the UI can in effect call class functions.
     cmds.submit_callb = partial(self.get_initial_value, self)
     cmds.do_submit_callb = partial(self.submit, self)
     cmds.login_with_google_callb = partial(self.login_with_google, self)
+    cmds.logout_callb = partial(self.logout, self)
 
     #
     #  Delete the "SubmitDialog" window if it exists.
@@ -1325,33 +1325,29 @@ class SubmitWindow(object):
     cmds.text('google_login_status', e=True, label='Logged in as %s' % user_email)
 
   @staticmethod
+  def logout(window):
+    zync_conn.logout()
+    cmds.text('google_login_status', e=True, label='')
+
+  @staticmethod
   def submit(window):
     """Submit a job to Zync.
 
     Args:
       window: The Zync Maya UI window
     """
+    if not zync_conn.has_user_login():
+      cmds.confirmDialog(title='Not Logged In',
+        message='You must login before submitting a new job.',
+        button='OK', defaultButton='OK', icon='critical')
+      return
+
     print 'Collecting render parameters...'
     scene_path = cmds.file(q=True, loc=True)
     params = window.get_render_params()
 
     print 'Collecting scene info...'
     params['scene_info'] = window.get_scene_info(params['renderer'])
-
-    # For standard Zync logins, we need to perform the login process. Otherwise
-    # an OAuth login is being used, and we assume the Zync connection has
-    # already been authenticated.
-    if window.login_type == 'zync':
-      print 'Authenticating...'
-      username = eval_ui('username', text=True)
-      password = eval_ui('password', text=True)
-      if username=='' or password=='':
-        msg = 'Please enter a Zync username and password.'
-        raise MayaZyncException(msg)
-      try:
-        zync_conn.login(username=username, password=password)
-      except zync.ZyncAuthenticationError as e:
-        raise MayaZyncException('Zync username authentication failed.')
 
     try:
       if (not window.maya_enabled or
