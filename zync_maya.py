@@ -139,8 +139,31 @@ def _cache_file_handler(node):
     '%s/%s.xml' % (path, cache_name),)
 
 def _diskCache_handler(node):
-  """Returns disk caches"""
-  yield (cmds.getAttr('%s.cacheName' % node),)
+  """Given a diskCache node, returns path of cache file it
+  references.
+
+  Args:
+    node: str, name of diskCache node
+
+  Yields:
+    tuple of str, paths referenced 
+  """
+  cache_name = cmds.getAttr('%s.cacheName' % node)
+  # if its an absolute path we're done, otherwise we need to resolve it
+  # via project settings
+  if os.path.isabs(cache_name):
+    yield (cache_name,)
+  else:
+    disk_cache_dir = cmds.workspace(fileRuleEntry='diskCache')
+    if not disk_cache_dir:
+      print 'WARNING: disk cache path not found. assuming data/'
+      disk_cache_dir = 'data'
+    # resolve relative paths with the main project path
+    if not os.path.isabs(disk_cache_dir):
+      disk_cache_dir = os.path.join(cmds.workspace(q=True, rd=True),
+                                    disk_cache_dir)
+    yield (os.path.join(disk_cache_dir,
+                        cache_name),)
 
 def _vrmesh_handler(node):
   """Handles vray meshes"""
@@ -317,8 +340,10 @@ def get_scene_files():
     for node in nodes:
       for files in handler(node):
         for scene_file in files:
-          if scene_file != None:
-            yield scene_file.replace('\\', '/')
+          if scene_file:
+            scene_file = scene_file.replace('\\', '/')
+            print 'found file dependency from %s node %s: %s' % (file_type, node, scene_file)
+            yield scene_file
 
   try:
     for xgen_file in get_xgen_files():
