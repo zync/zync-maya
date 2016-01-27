@@ -1,6 +1,6 @@
 # Zync Plugin for Autodesk's Maya
 
-Tested with Maya 2013, 2013.5, 2014, and 2015.
+Tested with Maya 2014, 2015, and 2016.
 
 ## zync-python
 
