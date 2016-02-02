@@ -360,8 +360,10 @@ def get_xgen_files():
   collection_list = xgenm.palettes()
   for collection in collection_list:
     for def_file in _get_xgen_collection_definition(collection):
+      print 'found Xgen collection definition: %s' % def_file
       yield def_file
     for xgen_file in _get_xgen_collection_files(collection):
+      print 'found Xgen collection file: %s' % xgen_file
       yield xgen_file
 
 def _get_xgen_collection_definition(collection_name):
