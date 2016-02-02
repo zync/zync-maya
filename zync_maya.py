@@ -14,6 +14,8 @@ Usage:
 
 """
 
+__version__ = '1.0.0'
+
 import copy
 import hashlib
 import math
@@ -531,7 +533,7 @@ class SubmitWindow(object):
   """
   A Maya UI window for submitting to Zync
   """
-  def __init__(self, title='Zync Submit'):
+  def __init__(self, title='Zync Submit (version %s)' % __version__):
     """
     Constructs the window.
     You must call show() to display the window.
@@ -635,6 +637,8 @@ class SubmitWindow(object):
     #  what each UI element does as it's loaded.
     #
     name = cmds.loadUI(f=ui_file)
+
+    cmds.window(name, e=True, title=self.title)
 
     #
     #  Callbacks - set up functions to be called as UI elements are modified.
@@ -1379,6 +1383,7 @@ class SubmitWindow(object):
 
     print 'Collecting scene info...'
     params['scene_info'] = window.get_scene_info(params['renderer'])
+    params['plugin_version'] = __version__
 
     try:
       if (not window.maya_enabled or
@@ -1563,6 +1568,9 @@ class SubmitWindow(object):
     cmds.setAttr('defaultRenderGlobals.animation', 1)
     cmds.setAttr('defaultRenderGlobals.startFrame', start_frame)
     cmds.setAttr('defaultRenderGlobals.endFrame', end_frame)
+    # Set resolution of the scene to layer resolution to avoid problems with regions.
+    cmds.setAttr('vraySettings.width', layer_params['xres'])
+    cmds.setAttr('vraySettings.height', layer_params['yres'])
 
     # Run the export.
     maya.mel.eval('vrend -camera "%s" -layer "%s"' % (layer_params['camera'], layer))
