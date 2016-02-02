@@ -309,6 +309,9 @@ def _exocortex_handler(node):
   """Handles Exocortex Alembic nodes"""
   yield (cmds.getAttr('%s.fileName' % (node,)),)
 
+def _vrayPtex_handler(node):
+  yield (cmds.getAttr('%s.ptexFile' % node),)
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {'file': _file_handler,
@@ -332,7 +335,8 @@ def get_scene_files():
     'aiStandIn': _aiStandIn_handler,
     'aiImage': _aiImage_handler,
     'aiPhotometricLight': _aiPhotometricLight_handler,
-    'ExocortexAlembicFile': _exocortex_handler}
+    'ExocortexAlembicFile': _exocortex_handler,
+    'VRayPtex': _vrayPtex_handler,}
 
   for file_type in file_types:
     handler = file_types.get(file_type)
