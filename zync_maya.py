@@ -389,11 +389,9 @@ def _get_xgen_collection_definition(collection_name):
   # must live in the same directory as the scene file and be named
   # according to a strict <scene name>__<collection name> format.
   # These are Xgen conventions, not specific to Zync.
-  # Maya avoids using the namespace character ':' in filenames, so
-  # we must do the same replacement.
   filenames = [
-    '%s__%s.xgen' % (scene_name, collection_name.replace(':', '__')),
-    '%s__%s.abc' % (scene_name, collection_name.replace(':', '__ns__')),
+    '%s__%s.xgen' % (scene_name, collection_name),
+    '%s__%s.abc' % (scene_name, collection_name),
   ]
   for filename in filenames:
     yield os.path.join(scene_dir, filename).replace('\\', '/')
