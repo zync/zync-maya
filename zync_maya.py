@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.0.1'
+__version__ = '1.0.2'
 
 import copy
 import hashlib
@@ -108,15 +108,22 @@ def seq_to_glob(in_path):
   return '%s/%s' % (head, new_base)
 
 def _file_handler(node):
-  """Returns the file referenced by the given node"""
-  texture_path = cmds.getAttr('%s.fileTextureName' % (node,))
+  """Returns the file referenced by a Maya file node. Returned files may
+  contain wildcards when they reference image sequences, for example an
+  animated texture node, or a path containing <UDIM> token."""
+  # If the path contains a <UDIM> token, use computedFileTextureNamePattern,
+  # it preserves the token.
+  if (cmds.attributeQuery('computedFileTextureNamePattern', node=node, exists=True) and
+      '<udim>' in cmds.getAttr('%s.computedFileTextureNamePattern' % node).lower()):
+    texture_path = cmds.getAttr('%s.computedFileTextureNamePattern' % node)
+  else:
+    texture_path = cmds.getAttr('%s.fileTextureName' % node)
   try:
     if cmds.getAttr('%s.useFrameExtension' % (node,)) == True:
       out_path = seq_to_glob(texture_path)
-    elif texture_path.find('<UDIM>') != -1:
-      out_path = texture_path.replace('<UDIM>', '*')
     else:
       out_path = texture_path
+    out_path = re.sub('<udim>', '*', out_path, flags=re.IGNORECASE)
     yield (out_path,)
     arnold_use_tx = False
     try:
