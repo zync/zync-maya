@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.0.2'
+__version__ = '1.0.3'
 
 import copy
 import hashlib
@@ -1257,6 +1257,22 @@ class SubmitWindow(object):
       scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
       scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
     scene_info['extension'] = scene_info['extension'][:3]
+
+    # collect a dict of attrs that define how output frames have frame numbers
+    # and extension added to their names.
+    if renderer == 'arnold':
+      print '--> output name format'
+      scene_info['output_name_format'] = {}
+      attr_list = {
+        'outFormatControl',
+        'animation',
+        'putFrameBeforeExt',
+        'periodInExt',
+        'extensionPadding',
+      }
+      for name_attr in attr_list:
+        if cmds.attributeQuery(name_attr, n='defaultRenderGlobals', ex=True):
+          scene_info['output_name_format'][name_attr] = cmds.getAttr('defaultRenderGlobals.%s' % name_attr)
 
     print '--> output file prefixes'
     scene_info['file_prefix'] = [get_layer_override('defaultRenderLayer', renderer, 'prefix')]
