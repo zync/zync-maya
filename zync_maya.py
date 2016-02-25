@@ -304,7 +304,10 @@ def _dynGlobals_handler(node):
 
 def _aiStandIn_handler(node):
   """Handles aiStandIn nodes"""
-  yield (cmds.getAttr('%s.dso' % (node,)),)
+  path = cmds.getAttr('%s.dso' % (node,))
+  # change frame reference to wildcard pattern
+  path = re.sub('#+', '*', path)
+  yield (path,)
 
 def _aiImage_handler(node):
   """Handles aiImage nodes"""
