@@ -533,6 +533,29 @@ def get_maya_version():
   #
   return str(int(float(maya.mel.eval('about -api')) / 100))
 
+def _rman_translate_format_to_extension(format):
+  """Translate an image format to the extension of files it
+  generates. For example, "openexr" becomes "exr".
+
+  Args:
+    format: str, the image format
+
+  Returns:
+    str, the output extension. If the format is unrecognized, the
+    original image format will be returned.
+  """
+  # rman getPref returns a flat string where even items are format
+  # names and odd indexes are file extensions. like:
+  # "openexr exr softimage pic shader slo"
+  formats_list = maya.mel.eval("rman getPref AssetnameExtTable;").split()
+  # look for the format, then return the next item in the string
+  # if the format isn't found, return it as is.
+  try:
+    format_index = formats_list.index(format)
+  except ValueError:
+    return format
+  return formats_list[format_index+1]
+
 class MayaZyncException(Exception):
   """
   This exception issues a Maya warning.
@@ -570,20 +593,6 @@ class SubmitWindow(object):
     if self.project[-1] == '/':
       self.project = self.project[:-1]
 
-    # set output directory. if the workspace has a mapping for "images", use that.
-    # otherwise default to the images/ folder.
-    self.output_dir = cmds.workspace(q=True, rd=True)
-    if self.output_dir[-1] != '/':
-      self.output_dir += '/'
-    images_rule = cmds.workspace(fileRuleEntry='images')
-    if images_rule != None and images_rule.strip() != '':
-      if images_rule[0] == '/' or images_rule[1] == ':':
-        self.output_dir = images_rule
-      else:
-        self.output_dir += images_rule
-    else:
-      self.output_dir += 'images'
-
     self.frange = frame_range()
     self.udim_range = udim_range()
     self.frame_step = cmds.getAttr('defaultRenderGlobals.byFrameStep')
@@ -597,6 +606,7 @@ class SubmitWindow(object):
     self.distributed = 0
     self.ignore_plugin_errors = 0
     self.login_type = 'zync'
+    self.chunk_size_allowed = True
 
     mi_setting = zync_conn.CONFIG.get('USE_MI')
     if mi_setting in (None, '', 1, '1'):
@@ -685,7 +695,6 @@ class SubmitWindow(object):
     if checked:
       cmds.textField('num_instances', e=True, en=False)
       cmds.optionMenu('instance_type', e=True, en=False)
-      #cmds.checkBox('start_new_slots', e=True, en=False)
       cmds.checkBox('skip_check', e=True, en=False)
       cmds.checkBox('distributed', e=True, en=False)
       cmds.textField('output_dir', e=True, en=False)
@@ -703,7 +712,6 @@ class SubmitWindow(object):
     else:
       cmds.textField('num_instances', e=True, en=True)
       cmds.optionMenu('instance_type', e=True, en=True)
-      #cmds.checkBox('start_new_slots', e=True, en=True)
       cmds.checkBox('skip_check', e=True, en=True)
       cmds.textField('output_dir', e=True, en=True)
       cmds.optionMenu('renderer', e=True, en=True)
@@ -741,43 +749,36 @@ class SubmitWindow(object):
     self.update_est_cost()
 
   def change_renderer(self, renderer):
-    renderer_seen = False
-    renderer_key = None
     if renderer in ('vray', 'V-Ray'):
-      renderer_seen = True
       renderer_key = 'vray'
       cmds.checkBox('vray_nightly', e=True, en=True)
-      cmds.checkBox('vray_nightly', e=True, v=False)
       cmds.checkBox('distributed', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
-    else:
+      self.chunk_size_allowed = True
+    elif renderer.lower() == 'arnold':
+      renderer_key = 'arnold'
       cmds.checkBox('vray_nightly', e=True, en=False)
       cmds.checkBox('distributed', e=True, en=False)
-    if renderer in ('mr', 'Mental Ray'):
-      renderer_seen = True
-      renderer_key = 'mr'
-      #if self.force_mi:
-      #  cmds.checkBox('use_standalone', e=True, en=False)
-      #else:
-      # cmds.checkBox('use_standalone', e=True, en=True)
-      #cmds.checkBox('use_standalone', e=True, v=True)
-      #cmds.checkBox('use_standalone', e=True, label='Use Mental Ray Standalone')
-    if renderer in ('arnold', 'Arnold'):
-      renderer_seen = True
-      renderer_key = 'arnold'
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
-      cmds.textField('chunk_size', e=True, en=False)
-    else:
-      cmds.textField('chunk_size', e=True, en=True)
-    # for any unknown renderer, disable standalone
-    if not renderer_seen:
-      cmds.checkBox('use_standalone', e=True, en=False)
+      self.chunk_size_allowed = True
+    elif renderer.lower() == 'renderman':
+      renderer_key = 'renderman'
+      cmds.checkBox('vray_nightly', e=True, en=False)
+      cmds.checkBox('distributed', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, v=False)
+      cmds.checkBox('use_standalone', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, label='Use Standalone')
+      self.chunk_size_allowed = False
+    else:
+      raise MayaZyncException('Unrecognized renderer "%s".' % renderer)
+    cmds.checkBox('vray_nightly', e=True, v=False)
+    cmds.checkBox('distributed', e=True, v=False)
+    cmds.textField('chunk_size', e=True, en=self.chunk_size_allowed)
+    cmds.textField('chunk_size', e=True, tx=('10' if self.chunk_size_allowed else '1'))
     #
     #  job_types dropdown - remove all items for list, then allow in job types
     #  from zync_conn.JOB_SUBTYPES
@@ -801,9 +802,11 @@ class SubmitWindow(object):
     cmds.optionMenu('job_type', e=True, vis=visible)
     cmds.text('job_type_label', e=True, vis=visible)
     self.change_job_type(first_type)
+    # force refresh of a few other UI elements
     self.init_instance_type()
     self.update_est_cost()
     self.change_standalone(eval_ui('use_standalone', 'checkBox', v=True))
+    self.init_output_dir()
 
   def change_job_type(self, job_type):
     job_type = job_type.lower()
@@ -860,7 +863,7 @@ class SubmitWindow(object):
     if current_renderer == 'arnold' and checked:
       cmds.textField('chunk_size', e=True, en=False)
     else:
-      cmds.textField('chunk_size', e=True, en=True)
+      cmds.textField('chunk_size', e=True, en=self.chunk_size_allowed)
 
   def select_new_project(self, selected):
     if selected:
@@ -954,11 +957,7 @@ class SubmitWindow(object):
 
     params['ignore_plugin_errors'] = int(eval_ui('ignore_plugin_errors', 'checkBox', v=True))
 
-    render = eval_ui('renderer', type='optionMenu', v=True)
-    for k in zync_conn.MAYA_RENDERERS:
-      if zync_conn.MAYA_RENDERERS[k] == render:
-        params['renderer'] = k
-        break
+    params['renderer'] = self.get_renderer()
 
     params['job_subtype'] = eval_ui('job_type', type='optionMenu', v=True).lower()
 
@@ -1071,10 +1070,7 @@ class SubmitWindow(object):
       cmds.deleteUI(old_types)
     current_renderer = None
     menu_option = eval_ui('renderer', type='optionMenu', v=True)
-    for k in zync_conn.MAYA_RENDERERS:
-      if zync_conn.MAYA_RENDERERS[k] == menu_option:
-        current_renderer = k
-        break
+    current_renderer = self.get_renderer()
     sorted_types = [t for t in zync_conn.INSTANCE_TYPES]
     sorted_types.sort(zync_conn.compare_instance_types)
     set_to = None
@@ -1108,11 +1104,14 @@ class SubmitWindow(object):
       key = 'vray'
     elif current_renderer == 'arnold':
       key = 'arnold'
+    # handle 'renderMan' and 'renderManRIS'
+    elif current_renderer.startswith('renderMan'):
+      key = 'renderman'
     else:
       key = 'vray'
-    if key in zync_conn.MAYA_RENDERERS:
-      default_renderer_name = zync_conn.MAYA_RENDERERS[key]
-      self.renderer = key
+    # if that renderer is not supported, default to Vray
+    default_renderer_name = zync_conn.MAYA_RENDERERS.get(key, 'vray')
+    self.renderer = key
     #
     #  Add the list of renderers to UI element.
     #
@@ -1133,16 +1132,30 @@ class SubmitWindow(object):
       if (cmds.getAttr(cam + '.renderable')) == True:
         cmds.menuItem(parent='camera', label=cam)
 
+  def init_output_dir(self):
+    # renderman doesn't use standard project settings, it has its own
+    # preference.
+    if self.get_renderer() == 'renderman':
+      default_output_dir = maya.mel.eval('rmanGetDir rfmImages')
+    else:
+      # the project settings define where that project's rendered images should
+      # go. get this project setting, defaulting to "images" if it's not found
+      # or blank.
+      images_rule = cmds.workspace(fileRuleEntry='images')
+      if not images_rule or not images_rule.strip():
+        images_rule = 'images'
+      # this is usually a relative path, and if it is it's relative to the
+      # project directory. if image_rule is an absolute path os.path.join
+      # will throw out the project dir.
+      default_output_dir = os.path.join(cmds.workspace(q=True, rd=True), images_rule)
+    cmds.textField('output_dir', e=True, tx=default_output_dir)
+
   def update_est_cost(self):
     machine_type = eval_ui('instance_type', type='optionMenu', v=True)
     if machine_type != None:
       machine_type = machine_type.split(' (')[0]
       renderer_label = eval_ui('renderer', type='optionMenu', v=True)
-      renderer = None
-      for k in zync_conn.MAYA_RENDERERS:
-        if zync_conn.MAYA_RENDERERS[k] == renderer_label:
-          renderer = k
-          break
+      renderer = self.get_renderer()
       if renderer != None:
         num_machines = int(eval_ui('num_instances', text=True))
         machine_type_base = machine_type.split(' ')[-1]
@@ -1159,6 +1172,22 @@ class SubmitWindow(object):
     else:
       text = 'Not Available'
     cmds.text('est_cost', e=True, label='Est. Cost per Hour: %s' % (text,))
+
+  def get_renderer(self):
+    """Get the renderer which is currently selected in the Zync plugin.
+    The label shown in the menu (and returned be eval_ui) is slightly
+    different than what we want, so we need to translate it based on
+    the master list of renderers.
+
+    Returns:
+      str, the currently selected renderer, or None if we weren't
+      able to identify the one selected.
+    """
+    selected_renderer_label = eval_ui('renderer', type='optionMenu', v=True)
+    for renderer, renderer_label in zync_conn.MAYA_RENDERERS.iteritems():
+      if renderer_label == selected_renderer_label:
+        return renderer
+    return None
 
   def get_scene_info(self, renderer):
     """
@@ -1259,6 +1288,13 @@ class SubmitWindow(object):
     elif renderer == 'arnold':
       scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
       scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
+    elif renderer == 'renderman':
+      if cmds.getAttr('defaultRenderGlobals.outFormatControl'):
+        scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.outFormatExt').lstrip('.')
+      else:
+        scene_info['extension'] = _rman_translate_format_to_extension(
+            cmds.getAttr('rmanFinalOutputGlobals0.rman__riopt__Display_type'))
+      scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
     scene_info['extension'] = scene_info['extension'][:3]
 
     # collect a dict of attrs that define how output frames have frame numbers
@@ -1327,16 +1363,28 @@ class SubmitWindow(object):
       print '--> vray version'
       try:
         scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
-      except:
-        raise Exception('Could not detect Vray version. This is required to render Vray jobs. Do you have the Vray plugin loaded?')
+      except Exception as e:
+        print str(e)
+        raise MayaZyncException('Could not detect Vray version. This is required to render Vray jobs. Do you have the Vray plugin loaded?')
 
     scene_info['arnold_version'] = ''
     if renderer == 'arnold':
       print '--> arnold version'
       try:
         scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True))
-      except:
-        raise Exception('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
+      except Exception as e:
+        print str(e)
+        raise MayaZyncException('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
+
+    if renderer == 'renderman':
+      print '--> renderman version'
+      try:
+        # Zync needs the prman version, not the RfM plugin version. until recently
+        # these were not synchronized. prman version comes back like "prman 20.7 @1571626"
+        scene_info['renderman_version'] = str(maya.mel.eval('rman getversion prman').split()[1])
+      except Exception as e:
+        print str(e)
+        raise MayaZyncException('Could not detect Renderman version. This is required to render Renderman jobs. Do you have the Renderman plugin loaded?')
 
     # If this is an Arnold job and AOVs are on, include a list of AOV
     # names in scene_info. If "Merge AOVs" is on, i.e. multichannel EXRs,
