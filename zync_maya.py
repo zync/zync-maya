@@ -123,7 +123,7 @@ def _file_handler(node):
       out_path = seq_to_glob(texture_path)
     else:
       out_path = texture_path
-    out_path = re.sub('<udim>', '*', out_path, flags=re.IGNORECASE)
+    out_path = re.sub('<udim>|<tile>', '*', out_path, flags=re.IGNORECASE)
     yield (out_path,)
     arnold_use_tx = False
     try:
