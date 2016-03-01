@@ -793,6 +793,7 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
       self.chunk_size_allowed = True
+      self._enable_resolution()
     elif renderer.lower() == 'arnold':
       renderer_key = 'arnold'
       cmds.checkBox('vray_nightly', e=True, en=False)
@@ -801,6 +802,7 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
       self.chunk_size_allowed = True
+      self._enable_resolution()
     elif renderer.lower() == 'renderman':
       renderer_key = 'renderman'
       cmds.checkBox('vray_nightly', e=True, en=False)
@@ -809,6 +811,7 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, label='Use Standalone')
       self.chunk_size_allowed = False
+      self._disable_resolution()
     else:
       raise MayaZyncException('Unrecognized renderer "%s".' % renderer)
     cmds.checkBox('vray_nightly', e=True, v=False)
@@ -843,6 +846,22 @@ class SubmitWindow(object):
     self.update_est_cost()
     self.change_standalone(eval_ui('use_standalone', 'checkBox', v=True))
     self.init_output_dir()
+
+  def _enable_resolution(self):
+    cmds.textField('x_res', e=True, en=True)
+    cmds.textField('y_res', e=True, en=True)
+    msg = 'Resolution of rendered frames.'
+    cmds.textField('x_res', e=True, annotation=msg)
+    cmds.textField('y_res', e=True, annotation=msg)
+
+  def _disable_resolution(self):
+    cmds.textField('x_res', e=True, en=False)
+    cmds.textField('y_res', e=True, en=False)
+    msg = ('This renderer doesn\'t support changing render resolution.\n'
+           'To change your resolution please change your scene render\n'
+           'settings and save a new version of your scene.')
+    cmds.textField('x_res', e=True, annotation=msg)
+    cmds.textField('y_res', e=True, annotation=msg)
 
   def change_job_type(self, job_type):
     job_type = job_type.lower()
