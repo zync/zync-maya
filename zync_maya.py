@@ -667,6 +667,8 @@ class SubmitWindow(object):
     """
     Loads the UI and does post-load commands.
     """
+    # Maya 2016 and up will use Maya IO by default.
+    self.is_maya_io = (int(get_maya_version()) >= 2016)
     # Create some new functions. These functions are called by UI elements in
     # resources/submit_dialog.ui. Each UI element in that file uses these
     # functions to query this window Object for its initial value.
@@ -713,20 +715,15 @@ class SubmitWindow(object):
     cmds.optionMenu('job_type', e=True, changeCommand=self.change_job_type)
     cmds.checkBox('distributed', e=True, changeCommand=self.distributed_toggle)
     cmds.textScrollList('layers', e=True, selectCommand=self.change_layers)
-    cmds.checkBox('use_standalone', e=True, changeCommand=self.change_standalone)
+    # No point in even showing the standalone option to users of old Maya, where
+    # we force standalone use.
+    cmds.checkBox('use_standalone', e=True, changeCommand=self.change_standalone,
+                  vis=self.is_maya_io)
     #
     #  Call a few of those callbacks now to set initial UI state.
     #
     self.change_renderer(self.renderer)
     self.select_new_project(True)
-
-    # Maya 2016 and up will use Maya IO by default. Otherwise default to
-    # launch a standalone job.
-    self.maya_enabled = (int(get_maya_version()) >= 2016)
-    if self.maya_enabled:
-      cmds.checkBox('use_standalone', e=True, vis=True)
-    else:
-      cmds.checkBox('use_standalone', e=True, vis=False)
 
     return name
 
@@ -779,7 +776,7 @@ class SubmitWindow(object):
       checked: bool, whether the checkbox is checked
     """
     # if DR is on use of standalone is required
-    cmds.checkBox('use_standalone', e=True, en=checked)
+    cmds.checkBox('use_standalone', e=True, en=not checked, value=checked)
 
   def change_num_instances(self, *args, **kwargs):
     self.update_est_cost()
@@ -1501,7 +1498,7 @@ class SubmitWindow(object):
     params['plugin_version'] = __version__
 
     try:
-      if (not window.maya_enabled or
+      if (not window.is_maya_io or
           eval_ui('use_standalone', 'checkBox', v=True)):
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
