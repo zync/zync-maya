@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.0.3'
+__version__ = '1.0.4'
 
 import copy
 import hashlib
@@ -124,7 +124,7 @@ def _file_handler(node):
     else:
       out_path = texture_path
     out_path = re.sub('<udim>|<tile>', '*', out_path, flags=re.IGNORECASE)
-    yield (out_path,)
+    yield out_path
     arnold_use_tx = False
     try:
       arnold_use_tx = cmds.getAttr('defaultArnoldRenderOptions.use_existing_tiled_textures')
@@ -134,18 +134,18 @@ def _file_handler(node):
       head, ext = os.path.splitext(out_path)
       tx_path = '%s.tx' % (head,)
       if os.path.exists(tx_path):
-        yield (tx_path,)
+        yield tx_path
   except:
-    yield (texture_path,)
+    yield texture_path
 
 def _cache_file_handler(node):
   """Returns the files references by the given cacheFile node"""
   path = cmds.getAttr('%s.cachePath' % node)
   cache_name = cmds.getAttr('%s.cacheName' % node)
 
-  yield ('%s/%s.mc' % (path, cache_name),
-    '%s/%s.mcx' % (path, cache_name),
-    '%s/%s.xml' % (path, cache_name),)
+  yield '%s/%s.mc' % (path, cache_name)
+  yield '%s/%s.mcx' % (path, cache_name)
+  yield '%s/%s.xml' % (path, cache_name)
 
 def _diskCache_handler(node):
   """Given a diskCache node, returns path of cache file it
@@ -161,7 +161,7 @@ def _diskCache_handler(node):
   # if its an absolute path we're done, otherwise we need to resolve it
   # via project settings
   if os.path.isabs(cache_name):
-    yield (cache_name,)
+    yield cache_name
   else:
     disk_cache_dir = cmds.workspace(fileRuleEntry='diskCache')
     if not disk_cache_dir:
@@ -171,20 +171,19 @@ def _diskCache_handler(node):
     if not os.path.isabs(disk_cache_dir):
       disk_cache_dir = os.path.join(cmds.workspace(q=True, rd=True),
                                     disk_cache_dir)
-    yield (os.path.join(disk_cache_dir,
-                        cache_name),)
+    yield os.path.join(disk_cache_dir, cache_name)
 
 def _vrmesh_handler(node):
   """Handles vray meshes"""
-  yield (cmds.getAttr('%s.fileName' % node),)
+  yield cmds.getAttr('%s.fileName' % node)
 
 def _mrtex_handler(node):
   """Handles mentalrayTexutre nodes"""
-  yield (cmds.getAttr('%s.fileTextureName' % node),)
+  yield cmds.getAttr('%s.fileTextureName' % node)
 
 def _gpu_handler(node):
   """Handles gpuCache nodes"""
-  yield (cmds.getAttr('%s.cacheFileName' % node),)
+  yield cmds.getAttr('%s.cacheFileName' % node)
 
 def _mrOptions_handler(node):
   """Handles mentalrayOptions nodes, for Final Gather"""
@@ -198,15 +197,15 @@ def _mrOptions_handler(node):
     #if not mapName.endswith(".fgmap"):
     #   path += ".fgmap"
     path += "*"
-    yield (path,)
+    yield path
 
 def _mrIbl_handler(node):
   """Handles mentalrayIblShape nodes"""
-  yield (cmds.getAttr('%s.texture' % node),)
+  yield cmds.getAttr('%s.texture' % node)
 
 def _abc_handler(node):
   """Handles AlembicNode nodes"""
-  yield (cmds.getAttr('%s.abc_File' % node),)
+  yield cmds.getAttr('%s.abc_File' % node)
 
 def _vrSettings_handler(node):
   """Handles VRaySettingsNode nodes, for irradiance map"""
@@ -217,8 +216,8 @@ def _vrSettings_handler(node):
     else:
       last_dot = irmap.rfind('.')
       irmap = '%s*%s' % (irmap[:last_dot], irmap[last_dot:])
-  yield (irmap,
-       cmds.getAttr('%s.fnm' % node),)
+  yield irmap
+  yield cmds.getAttr('%s.fnm' % node)
 
 def _particle_handler(node):
   project_dir = cmds.workspace(q=True, rd=True)
@@ -240,11 +239,11 @@ def _particle_handler(node):
   if path == None:
     scene_base, ext = os.path.splitext(os.path.basename(cmds.file(q=True, loc=True)))
     path = '%s/particles/%s/%s*' % (project_dir, scene_base, node_base)
-  yield (path,)
+  yield path
 
 def _ies_handler(node):
   """Handles VRayLightIESShape nodes, for IES lighting files"""
-  yield (cmds.getAttr('%s.iesFile' % node),)
+  yield cmds.getAttr('%s.iesFile' % node)
 
 def _fur_handler(node):
   """Handles FurDescription nodes"""
@@ -258,17 +257,17 @@ def _fur_handler(node):
         try:
           map_path = cmds.getAttr('%s.%s[%s]' % (node, attr, index))
           if map_path != None and map_path != '':
-            yield (map_path,)
+            yield map_path
         except:
           pass
 
 def _ptex_handler(node):
   """Handles Mental Ray ptex nodes"""
-  yield(cmds.getAttr('%s.S00' % node),)
+  yield cmds.getAttr('%s.S00' % node)
 
 def _substance_handler(node):
   """Handles Vray Substance nodes"""
-  yield(cmds.getAttr('%s.p' % node),)
+  yield cmds.getAttr('%s.p' % node)
 
 def _imagePlane_handler(node):
   """Handles Image Planes"""
@@ -277,18 +276,18 @@ def _imagePlane_handler(node):
     texture_path = cmds.getAttr('%s.imageName' % (node,))
     try:
       if cmds.getAttr('%s.useFrameExtension' % (node,)) == True:
-        yield (seq_to_glob(texture_path),)
+        yield seq_to_glob(texture_path)
       else:
-        yield (texture_path,)
+        yield texture_path
     except:
-      yield (texture_path,)
+      yield texture_path
 
 def _mesh_handler(node):
   """Handles Mesh nodes, in case they are using MR Proxies"""
   try:
     proxy_path = cmds.getAttr('%s.miProxyFile' % (node,))
     if proxy_path != None:
-      yield (proxy_path,)
+      yield proxy_path
   except:
     pass
 
@@ -300,33 +299,72 @@ def _dynGlobals_handler(node):
   cache_dir = cmds.getAttr('%s.cd' % (node,))
   if cache_dir not in (None, ''):
     path = '%s/particles/%s/*' % (project_dir, cache_dir.strip())
-    yield (path,)
+    yield path
 
 def _aiStandIn_handler(node):
   """Handles aiStandIn nodes"""
   path = cmds.getAttr('%s.dso' % (node,))
   # change frame reference to wildcard pattern
   path = re.sub('#+', '*', path)
-  yield (path,)
+  yield path
 
 def _aiImage_handler(node):
   """Handles aiImage nodes"""
-  yield (cmds.getAttr('%s.filename' % (node,)),)
+  yield cmds.getAttr('%s.filename' % node)
 
 def _aiPhotometricLight_handler(node):
   """Handles aiPhotometricLight nodes"""
-  yield (cmds.getAttr('%s.aiFilename' % (node,)),)
+  yield cmds.getAttr('%s.aiFilename' % node)
 
 def _exocortex_handler(node):
   """Handles Exocortex Alembic nodes"""
-  yield (cmds.getAttr('%s.fileName' % (node,)),)
+  yield cmds.getAttr('%s.fileName' % node)
 
 def _vrayPtex_handler(node):
-  yield (cmds.getAttr('%s.ptexFile' % node),)
+  yield cmds.getAttr('%s.ptexFile' % node)
+
+def _ribArchive_handler(node):
+  """Handles RIB archive nodes"""
+  archive_path = cmds.getAttr('%s.filename' % node)
+  yield archive_path
+  # determine the name of the RIB archive directory, which matches part
+  # of the basename of the archive path. e.g.:
+  #   archive1.zip: archive name = "archive1"
+  #   archive1.${F4}.rib: archive name also = "archive1"
+  # "rman subst" resolves all placeholders such as frame number. if the
+  # resolved name differs from the original, we assume there's a frame
+  # number chunk at the end of the name we must also drop to arrive at
+  # the archive name.
+  if maya.mel.eval('rman subst "%s"' % archive_path) == archive_path:
+    last_index = -1
+  else:
+    last_index = -2
+  archive_name = '.'.join(os.path.basename(archive_path).split('.')[:last_index])
+  # now we find the archive directory, which contains various materials
+  # associated with the archive. there are a few scenarios...
+  #
+  # use case #1: the RIB archive lives within the archive directory
+  if os.path.basename(os.path.dirname(archive_path)) == archive_name:
+    archive_dir = os.path.dirname(archive_path)
+  # use case #2: RIB archive is a sibling of the archive directory
+  elif os.path.exists(os.path.join(os.path.dirname(archive_path), archive_name)):
+    archive_dir = os.path.join(os.path.dirname(archive_path), archive_name)
+  # use case #3: we couldn't find the archive directory. log a warning and just
+  #              yield the archive itself.
+  else:
+    print 'WARNING: could not locate RIB archive directory for node %s' % node
+    archive_dir = None
+  # Zync prefers file paths rather than directories, so walk the archive
+  # directory and add all child files to the file list
+  if archive_dir:
+    for current_dir, child_dirs, child_files in os.walk(archive_dir):
+      for child_file in child_files:
+        yield os.path.join(current_dir, child_file)
 
 def get_scene_files():
   """Returns all of the files being used by the scene"""
-  file_types = {'file': _file_handler,
+  file_types = {
+    'file': _file_handler,
     'cacheFile': _cache_file_handler,
     'diskCache': _diskCache_handler,
     'VRayMesh': _vrmesh_handler,
@@ -348,18 +386,19 @@ def get_scene_files():
     'aiImage': _aiImage_handler,
     'aiPhotometricLight': _aiPhotometricLight_handler,
     'ExocortexAlembicFile': _exocortex_handler,
-    'VRayPtex': _vrayPtex_handler,}
+    'VRayPtex': _vrayPtex_handler,
+    'RenderManArchive': _ribArchive_handler,
+  }
 
   for file_type in file_types:
     handler = file_types.get(file_type)
     nodes = cmds.ls(type=file_type)
     for node in nodes:
-      for files in handler(node):
-        for scene_file in files:
-          if scene_file:
-            scene_file = scene_file.replace('\\', '/')
-            print 'found file dependency from %s node %s: %s' % (file_type, node, scene_file)
-            yield scene_file
+      for scene_file in handler(node):
+        if scene_file:
+          scene_file = scene_file.replace('\\', '/')
+          print 'found file dependency from %s node %s: %s' % (file_type, node, scene_file)
+          yield scene_file
 
   try:
     for xgen_file in get_xgen_files():
