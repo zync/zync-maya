@@ -1469,29 +1469,30 @@ class SubmitWindow(object):
         print '--> AOVs'
         scene_info['aovs'] = [cmds.getAttr('%s.name' % (n,)) for n in cmds.ls(type='aiAOV')]
 
-        # Here goes verification of the output prefixes. Once the AOVs are about
-        # to render into the separate files, output prefix is suppose to contain
-        # <RenderPass> tag. The regular prefixes can be override by the one set
-        # up in the defaultArnoldDriver
-        output_prefix_aov_warning = False
-        for output in prefixes_to_verify:
-          if '<RenderPass>' not in output:
-            output_prefix_aov_warning = True
-        if (output_prefix_aov_warning and not override_prefix) or \
-            (override_prefix and '<RenderPass>' not in override_prefix):
-          confirm_mesage = 'Yes, I want to send it.'
-          cancel_message = 'No, Do not send.'
-          AOV_dialog_result = cmds.confirmDialog(
-              title='RenderPass tag missing',
-              message='AOVs are selected to render into separate files, but the '
-                      'output prefix of one of the layers does not contain '
-                      '<RenderPass> tag. Are you sure the configuration is correct?',
-              button=(confirm_mesage, cancel_message),
-              defaultButton=confirm_mesage,
-              cancelButton=cancel_message,
-              icon='warning')
-          if AOV_dialog_result != confirm_mesage:
-            raise ZyncAbortedByUser('Aborted by user')
+        if scene_info['aovs']:
+          # Here goes verification of the output prefixes. Once the AOVs are about
+          # to render into the separate files, output prefix is suppose to contain
+          # <RenderPass> tag. The regular prefixes can be override by the one set
+          # up in the defaultArnoldDriver
+          output_prefix_aov_warning = False
+          for output in prefixes_to_verify:
+            if '<RenderPass>' not in output:
+              output_prefix_aov_warning = True
+          if (output_prefix_aov_warning and not override_prefix) or \
+              (override_prefix and '<RenderPass>' not in override_prefix):
+            confirm_mesage = 'Yes, I want to send it.'
+            cancel_message = 'No, Do not send.'
+            AOV_dialog_result = cmds.confirmDialog(
+                title='RenderPass tag missing',
+                message='AOVs are selected to render into separate files, but the '
+                        'output prefix of one of the layers does not contain '
+                        '<RenderPass> tag. Are you sure the configuration is correct?',
+                button=(confirm_mesage, cancel_message),
+                defaultButton=confirm_mesage,
+                cancelButton=cancel_message,
+                icon='warning')
+            if AOV_dialog_result != confirm_mesage:
+              raise ZyncAbortedByUser('Aborted by user')
 
       else:
         scene_info['aovs'] = []
