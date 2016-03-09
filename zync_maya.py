@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.0.5'
+__version__ = '1.0.6'
 
 import copy
 import hashlib
@@ -361,6 +361,10 @@ def _ribArchive_handler(node):
       for child_file in child_files:
         yield os.path.join(current_dir, child_file)
 
+def _pxrStdEnvMap_handler(node):
+  """Handles PxrStdEnvMapLight nodes"""
+  yield cmds.getAttr('%s.rman__EnvMap' % node)
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {
@@ -388,6 +392,7 @@ def get_scene_files():
     'ExocortexAlembicFile': _exocortex_handler,
     'VRayPtex': _vrayPtex_handler,
     'RenderManArchive': _ribArchive_handler,
+    'PxrStdEnvMapLight': _pxrStdEnvMap_handler,
   }
 
   for file_type in file_types:
