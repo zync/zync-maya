@@ -365,6 +365,10 @@ def _pxrStdEnvMap_handler(node):
   """Handles PxrStdEnvMapLight nodes"""
   yield cmds.getAttr('%s.rman__EnvMap' % node)
 
+def _pxrTexture_handler(node):
+  """Handles PxrTexture nodes"""
+  yield cmds.getAttr('%s.filename' % node)
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {
@@ -393,6 +397,7 @@ def get_scene_files():
     'VRayPtex': _vrayPtex_handler,
     'RenderManArchive': _ribArchive_handler,
     'PxrStdEnvMapLight': _pxrStdEnvMap_handler,
+    'PxrTexture': _pxrTexture_handler,
   }
 
   for file_type in file_types:
