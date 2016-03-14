@@ -323,6 +323,9 @@ def _exocortex_handler(node):
 def _vrayPtex_handler(node):
   yield cmds.getAttr('%s.ptexFile' % node)
 
+def _vrayVolumeGrid_handler(node):
+  yield cmds.getAttr('%s.if' % node)
+
 def _ribArchive_handler(node):
   """Handles RIB archive nodes"""
   archive_path = cmds.getAttr('%s.filename' % node)
@@ -395,6 +398,7 @@ def get_scene_files():
     'aiPhotometricLight': _aiPhotometricLight_handler,
     'ExocortexAlembicFile': _exocortex_handler,
     'VRayPtex': _vrayPtex_handler,
+    'VRayVolumeGrid': _vrayVolumeGrid_handler,
     'RenderManArchive': _ribArchive_handler,
     'PxrStdEnvMapLight': _pxrStdEnvMap_handler,
     'PxrTexture': _pxrTexture_handler,
