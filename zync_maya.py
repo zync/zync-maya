@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.0.6'
+__version__ = '1.0.7'
 
 import copy
 import hashlib
@@ -326,6 +326,9 @@ def _vrayPtex_handler(node):
 def _vrayVolumeGrid_handler(node):
   yield cmds.getAttr('%s.if' % node)
 
+def _vrayScene_handler(node):
+  yield cmds.getAttr('%s.fPath' % node)
+
 def _ribArchive_handler(node):
   """Handles RIB archive nodes"""
   archive_path = cmds.getAttr('%s.filename' % node)
@@ -399,6 +402,7 @@ def get_scene_files():
     'ExocortexAlembicFile': _exocortex_handler,
     'VRayPtex': _vrayPtex_handler,
     'VRayVolumeGrid': _vrayVolumeGrid_handler,
+    'VRayScene': _vrayScene_handler,
     'RenderManArchive': _ribArchive_handler,
     'PxrStdEnvMapLight': _pxrStdEnvMap_handler,
     'PxrTexture': _pxrTexture_handler,
