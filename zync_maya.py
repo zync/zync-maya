@@ -101,42 +101,92 @@ def udim_range():
   return '1001-%d' % (1001+u_max+(10*v_max))
 
 def seq_to_glob(in_path):
+  """Takes an image sequence path and returns it in glob format,
+  with the frame number replaced by a '*'.
+  Image sequences may be numerical sequences, e.g. /path/to/file.1001.exr
+  will return as /path/to/file.*.exr.
+  Image sequences may also use tokens to denote sequences, e.g.
+  /path/to/texture.<UDIM>.tif will return as /path/to/texture.*.tif.
+  Args:
+    in_path: str, the image sequence path
+  """
+  if in_path is None:
+    return in_path
+  if '<udim>' in in_path.lower():
+    return re.sub('<udim>', '*', in_path, flags=re.IGNORECASE)
+  if '<tile>' in in_path.lower():
+    return re.sub('<tile>', '*', in_path, flags=re.IGNORECASE)
+  if '#' in in_path:
+    return re.sub('#+', '*', in_path, flags=re.IGNORECASE)
+  if 'u<u>_v<v>' in in_path.lower():
+    return re.sub('<u>|<v>', '*', in_path, flags=re.IGNORECASE)
   head = os.path.dirname(in_path)
   base = os.path.basename(in_path)
-  match = list(re.finditer('\d+', base))[-1]
-  new_base = '%s*%s' % (base[:match.start()], base[match.end():])
-  return '%s/%s' % (head, new_base)
+  matches = list(re.finditer(r'\d+', base))
+  if matches:
+    match = matches[-1]
+    new_base = '%s*%s' % (base[:match.start()], base[match.end():])
+    return '%s/%s' % (head, new_base)
+  else:
+    return in_path
+
+def get_file_node_path(node):
+  """Get the file path used by a Maya file node.
+  Args:
+    node: str, name of the Maya file node
+  Returns:
+    str, the file path in use
+  """
+  # if the path appears to be sequence, use computedFileTextureNamePattern,
+  # this preserves the <> tag
+  if cmds.attributeQuery('computedFileTextureNamePattern', node=node, exists=True):
+    textureNamePattern = cmds.getAttr('%s.computedFileTextureNamePattern' % node)
+    if ('<udim>' in textureNamePattern.lower() or '<tile>' in textureNamePattern.lower() 
+        or 'u<u>_v<v>' in textureNamePattern or 'u<U>_v<V>' in textureNamePattern):
+      return cmds.getAttr('%s.computedFileTextureNamePattern' % node)
+  # otherwise use fileTextureName
+  return cmds.getAttr('%s.fileTextureName' % node)
+
+def node_uses_image_sequence(node):
+  """Determine if a node uses an image sequence or just a single image,
+  not always obvious from its file path alone.
+  Args:
+    node: str, name of the Maya node
+  Returns:
+    bool, True if node uses an image sequence
+  """
+  # useFrameExtension indicates an explicit image sequence
+  # a <UDIM> token implies a sequence
+  node_path = get_file_node_path(node).lower()
+  return (cmds.getAttr('%s.useFrameExtension' % node) == True or
+          '<udim>' in node_path or '<tile>' in node_path or 'u<u>_v<v>' in node_path)
 
 def _file_handler(node):
   """Returns the file referenced by a Maya file node. Returned files may
   contain wildcards when they reference image sequences, for example an
   animated texture node, or a path containing <UDIM> token."""
-  # If the path contains a <UDIM> token, use computedFileTextureNamePattern,
-  # it preserves the token.
-  if (cmds.attributeQuery('computedFileTextureNamePattern', node=node, exists=True) and
-      '<udim>' in cmds.getAttr('%s.computedFileTextureNamePattern' % node).lower()):
-    texture_path = cmds.getAttr('%s.computedFileTextureNamePattern' % node)
-  else:
-    texture_path = cmds.getAttr('%s.fileTextureName' % node)
+  texture_path = get_file_node_path(node)
+  # if the node is an image sequence, transform the path into a
+  # glob-style path, i.e. using * in place of any sequence number
+  # or token. this will match what's provided via the file list
+  # in the job's scene_info, so we can properly path swap
+  if node_uses_image_sequence(node):
+    texture_path = seq_to_glob(texture_path) 
+  # if the Arnold "Use .tx" flag is on, look for a .tx version
+  # of the texture as well
   try:
-    if cmds.getAttr('%s.useFrameExtension' % (node,)) == True:
-      out_path = seq_to_glob(texture_path)
-    else:
-      out_path = texture_path
-    out_path = re.sub('<udim>|<tile>', '*', out_path, flags=re.IGNORECASE)
-    yield out_path
-    arnold_use_tx = False
-    try:
-      arnold_use_tx = cmds.getAttr('defaultArnoldRenderOptions.use_existing_tiled_textures')
-    except:
-      arnold_use_tx = False
-    if arnold_use_tx:
-      head, ext = os.path.splitext(out_path)
-      tx_path = '%s.tx' % (head,)
-      if os.path.exists(tx_path):
-        yield tx_path
+    arnold_use_tx = cmds.getAttr('defaultArnoldRenderOptions.use_existing_tiled_textures')
   except:
-    yield texture_path
+    arnold_use_tx = False
+  if arnold_use_tx:
+    try:
+      head, ext = os.path.splitext(texture_path)
+      tx_path = '%s.tx' % (head,)
+      return [texture_path, tx_path]
+    except:
+      return [texture_path]
+  else:
+    return [texture_path]
 
 def _cache_file_handler(node):
   """Returns the files references by the given cacheFile node"""
@@ -305,8 +355,7 @@ def _aiStandIn_handler(node):
   """Handles aiStandIn nodes"""
   path = cmds.getAttr('%s.dso' % (node,))
   # change frame reference to wildcard pattern
-  path = re.sub('#+', '*', path)
-  yield path
+  yield seq_to_glob(path)
 
 def _aiImage_handler(node):
   """Handles aiImage nodes"""
