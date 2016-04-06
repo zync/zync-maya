@@ -485,8 +485,10 @@ def get_xgen_files():
   # loaded, stop.
   if _XGEN_IMPORT_ERROR:
     raise NameError('Xgen is not loaded due to error: %s' % _XGEN_IMPORT_ERROR)
-  collection_list = xgenm.palettes()
-  for collection in collection_list:
+  # get collection list using uiPalettes() instead of the standard
+  # xgenm.palettes() because the latter can pick up temp collections
+  # which aren't needed and sometimes don't actually exist.
+  for collection in xgenm.ui.util.xgUtil.uiPalettes():
     for def_file in _get_xgen_collection_definition(collection):
       print 'found Xgen collection definition: %s' % def_file
       yield def_file
