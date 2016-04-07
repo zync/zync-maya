@@ -334,12 +334,13 @@ def _imagePlane_handler(node):
 
 def _mesh_handler(node):
   """Handles Mesh nodes, in case they are using MR Proxies"""
-  try:
-    proxy_path = cmds.getAttr('%s.miProxyFile' % (node,))
-    if proxy_path != None:
-      yield proxy_path
-  except:
-    pass
+  for attr in ['%s.miProxyFile', '%s.rman__param___draFile']:
+    try:
+      proxy_path = cmds.getAttr(attr % node)
+      if proxy_path != None:
+        yield proxy_path
+    except:
+      pass
 
 def _dynGlobals_handler(node):
   """Handles dynGlobals nodes"""
