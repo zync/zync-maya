@@ -430,6 +430,11 @@ def _rmsEnvLight_handler(node):
   yield cmds.getAttr('%s.rman__EnvMap' % node)
 
 
+def _openVDBRead_handler(node):
+  """Handles RMSEnvLight nodes"""
+  yield cmds.getAttr('%s.file' % node)
+
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {
@@ -462,6 +467,7 @@ def get_scene_files():
     'PxrStdEnvMapLight': _pxrStdEnvMap_handler,
     'PxrTexture': _pxrTexture_handler,
     'RMSEnvLight': _rmsEnvLight_handler,
+    'OpenVDBRead': _openVDBRead_handler,
   }
 
   for file_type in file_types:
