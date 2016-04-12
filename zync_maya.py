@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.0.8'
+__version__ = '1.1.0'
 
 import copy
 import hashlib
@@ -25,19 +25,19 @@ import re
 import string
 import sys
 import time
+import traceback
 import webbrowser
 from functools import partial
 
-if os.environ.get('ZYNC_API_DIR') and os.environ.get('ZYNC_MAYA_API_KEY'):
+if os.environ.get('ZYNC_API_DIR'):
   API_DIR = os.environ.get('ZYNC_API_DIR')
-  API_KEY = os.environ.get('ZYNC_MAYA_API_KEY')
 else:
   config_path = '%s/config_maya.py' % (os.path.dirname(__file__),)
   if not os.path.exists(config_path):
     raise Exception('Could not locate config_maya.py, please create.')
   from config_maya import *
 
-required_config = ['API_DIR', 'API_KEY']
+required_config = ['API_DIR']
 
 for key in required_config:
   if not key in globals():
@@ -45,7 +45,6 @@ for key in required_config:
 
 sys.path.append(API_DIR)
 import zync
-zync_conn = zync.Zync('maya_plugin', API_KEY, application='maya')
 
 UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
@@ -713,7 +712,11 @@ class SubmitWindow(object):
         button='OK', defaultButton='OK', icon='critical')
       cmds.error(err_msg)
 
-    self.new_project_name = zync_conn.get_project_name(scene_name)
+    # this will perform the Google OAuth flow so future API requests
+    # will be authenticated
+    self.zync_conn = zync.Zync(application='maya')
+
+    self.new_project_name = self.zync_conn.get_project_name(scene_name)
 
     self.num_instances = 1
     self.priority = 50
@@ -738,7 +741,7 @@ class SubmitWindow(object):
     self.login_type = 'zync'
     self.chunk_size_allowed = True
 
-    mi_setting = zync_conn.CONFIG.get('USE_MI')
+    mi_setting = self.zync_conn.CONFIG.get('USE_MI')
     if mi_setting in (None, '', 1, '1'):
       self.force_mi = True
     else:
@@ -815,6 +818,7 @@ class SubmitWindow(object):
     #
     self.change_renderer(self.renderer)
     self.select_new_project(True)
+    self.set_user_label(self.zync_conn.email)
 
     return name
 
@@ -908,7 +912,7 @@ class SubmitWindow(object):
     cmds.textField('chunk_size', e=True, tx=('10' if self.chunk_size_allowed else '1'))
     #
     #  job_types dropdown - remove all items for list, then allow in job types
-    #  from zync_conn.JOB_SUBTYPES
+    #  from self.zync_conn.JOB_SUBTYPES
     #
     old_types = cmds.optionMenu('job_type', q=True, ill=True)
     if old_types != None:
@@ -1092,7 +1096,7 @@ class SubmitWindow(object):
     params['num_instances'] = int(eval_ui('num_instances', text=True))
 
     selected_type = eval_ui('instance_type', 'optionMenu', v=True)
-    for inst_type in zync_conn.INSTANCE_TYPES:
+    for inst_type in self.zync_conn.INSTANCE_TYPES:
       if selected_type.split(' (')[0] == inst_type:
         params['instance_type'] = inst_type
         break
@@ -1173,7 +1177,7 @@ class SubmitWindow(object):
       self.layers = cmds.ls(type='renderLayer')
 
   def init_existing_project_name(self):
-    self.projects = zync_conn.get_project_list()
+    self.projects = self.zync_conn.get_project_list()
     project_found = False
     for project in self.projects:
       cmds.menuItem(parent='existing_project_name', label=project['name'])
@@ -1198,19 +1202,19 @@ class SubmitWindow(object):
     current_renderer = None
     menu_option = eval_ui('renderer', type='optionMenu', v=True)
     current_renderer = self.get_renderer()
-    sorted_types = [t for t in zync_conn.INSTANCE_TYPES]
-    sorted_types.sort(zync_conn.compare_instance_types)
+    sorted_types = [t for t in self.zync_conn.INSTANCE_TYPES]
+    sorted_types.sort(self.zync_conn.compare_instance_types)
     set_to = None
     for inst_type in sorted_types:
-      label = '%s (%s)' % (inst_type, zync_conn.INSTANCE_TYPES[inst_type]['description'].replace(', preemptible',''))
+      label = '%s (%s)' % (inst_type, self.zync_conn.INSTANCE_TYPES[inst_type]['description'].replace(', preemptible',''))
       if current_renderer != None:
         inst_type_base = inst_type.split(' ')[-1]
         field_name = 'CP-ZYNC-%s-%s' % (inst_type_base.upper(), current_renderer.upper())
         if 'PREEMPTIBLE' in inst_type.upper():
           field_name += '-PREEMPTIBLE'
-        if (field_name in zync_conn.PRICING['gcp_price_list'] and
-          'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
-          cost = '$%.02f' % (float(zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
+        if (field_name in self.zync_conn.PRICING['gcp_price_list'] and
+          'us' in self.zync_conn.PRICING['gcp_price_list'][field_name]):
+          cost = '$%.02f' % (float(self.zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
           label += ' %s' % (cost,)
       if inst_type == current_machine_type:
         set_to = label
@@ -1237,13 +1241,13 @@ class SubmitWindow(object):
     else:
       key = 'vray'
     # if that renderer is not supported, default to Vray
-    default_renderer_name = zync_conn.MAYA_RENDERERS.get(key, 'vray')
+    default_renderer_name = self.zync_conn.MAYA_RENDERERS.get(key, 'vray')
     self.renderer = key
     #
     #  Add the list of renderers to UI element.
     #
     rend_found = False
-    for item in zync_conn.MAYA_RENDERERS.values():
+    for item in self.zync_conn.MAYA_RENDERERS.values():
       cmds.menuItem(parent='renderer', label=item)
       if item == default_renderer_name:
         rend_found = True
@@ -1251,7 +1255,7 @@ class SubmitWindow(object):
       cmds.optionMenu('renderer', e=True, v=default_renderer_name)
 
   def init_job_type(self):
-    self.job_types = zync_conn.JOB_SUBTYPES['maya']
+    self.job_types = self.zync_conn.JOB_SUBTYPES['maya']
 
   def init_camera(self):
     cam_parents = [cmds.listRelatives(x, ap=True)[-1] for x in cmds.ls(cameras=True)]
@@ -1289,9 +1293,9 @@ class SubmitWindow(object):
         field_name = 'CP-ZYNC-%s-%s' % (machine_type_base.upper(), renderer.upper())
         if 'PREEMPTIBLE' in machine_type.upper():
           field_name += '-PREEMPTIBLE'
-        if (field_name in zync_conn.PRICING['gcp_price_list'] and
-          'us' in zync_conn.PRICING['gcp_price_list'][field_name]):
-          text = '$%.02f' % ((num_machines * zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
+        if (field_name in self.zync_conn.PRICING['gcp_price_list'] and
+          'us' in self.zync_conn.PRICING['gcp_price_list'][field_name]):
+          text = '$%.02f' % ((num_machines * self.zync_conn.PRICING['gcp_price_list'][field_name]['us']),)
         else:
           text = 'Not Available'
       else:
@@ -1311,7 +1315,7 @@ class SubmitWindow(object):
       able to identify the one selected.
     """
     selected_renderer_label = eval_ui('renderer', type='optionMenu', v=True)
-    for renderer, renderer_label in zync_conn.MAYA_RENDERERS.iteritems():
+    for renderer, renderer_label in self.zync_conn.MAYA_RENDERERS.iteritems():
       if renderer_label == selected_renderer_label:
         return renderer
     return None
@@ -1562,6 +1566,12 @@ class SubmitWindow(object):
 
     return scene_info
 
+  def set_user_label(self, username):
+    cmds.text('google_login_status', e=True, label='Logged in as %s' % username)
+
+  def clear_user_label(self):
+    cmds.text('google_login_status', e=True, label='')
+
   @staticmethod
   def get_initial_value(window, name):
     """Returns the initial value for a given attribute.
@@ -1590,13 +1600,13 @@ class SubmitWindow(object):
       window: The Zync Maya UI window
     """
     window.login_type = 'google'
-    user_email = zync_conn.login_with_google()
-    cmds.text('google_login_status', e=True, label='Logged in as %s' % user_email)
+    window.zync_conn.login_with_google()
+    window.set_user_label(window.zync_conn.email)
 
   @staticmethod
   def logout(window):
-    zync_conn.logout()
-    cmds.text('google_login_status', e=True, label='')
+    window.zync_conn.logout()
+    window.clear_user_label()
 
   @staticmethod
   def submit(window):
@@ -1605,7 +1615,7 @@ class SubmitWindow(object):
     Args:
       window: The Zync Maya UI window
     """
-    if not zync_conn.has_user_login():
+    if not window.zync_conn.has_user_login():
       cmds.confirmDialog(title='Not Logged In',
         message='You must login before submitting a new job.',
         button='OK', defaultButton='OK', icon='critical')
@@ -1640,7 +1650,7 @@ class SubmitWindow(object):
         if params['renderer'] == 'vray':
           print 'Vray job, collecting additional info...'
 
-          vrscene_path = window.get_standalone_scene_path('vrscene')
+          vrscene_path = window.get_standalone_scene_path('vrscene', window)
 
           print 'Exporting .vrscene files...'
           for layer in layer_list:
@@ -1658,12 +1668,12 @@ class SubmitWindow(object):
                                    'was not found. Unable to submit job.')
 
             print 'Submitting job for layer %s...' % (layer,)
-            zync_conn.submit_job('vray', layer_file, params=layer_params)
+            window.zync_conn.submit_job('vray', layer_file, params=layer_params)
 
         elif params['renderer'] == 'arnold':
           print 'Arnold job, collecting additional info...'
 
-          ass_path = window.get_standalone_scene_path('ass')
+          ass_path = window.get_standalone_scene_path('ass', window)
 
           print 'Exporting .ass files...'
           for layer in layer_list:
@@ -1671,7 +1681,7 @@ class SubmitWindow(object):
             layer_file_wildcard, layer_params = window.export_ass(ass_path,
                 layer, params, sf, ef)
             print 'Submitting job for layer %s...' % (layer,)
-            zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
+            window.zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
 
         else:
           raise MayaZyncException('Renderer %s unsupported for standalone rendering.' % params['renderer'])
@@ -1695,10 +1705,10 @@ class SubmitWindow(object):
         cmds.file(modified=original_modified)
         '''
 
-        if not window.verify_eula_acceptance(zync_conn):
+        if not window.verify_eula_acceptance(window.zync_conn):
           cmds.error('Job submission canceled.')
 
-        zync_conn.submit_job('maya', scene_path, params=params)
+        window.zync_conn.submit_job('maya', scene_path, params=params)
         cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
           button='OK', defaultButton='OK')
 
@@ -1902,7 +1912,7 @@ class SubmitWindow(object):
     return layer_file_wildcard, layer_params
 
   @staticmethod
-  def get_standalone_scene_path(suffix):
+  def get_standalone_scene_path(suffix, window):
     """Get a file path for exporting a standalone scene, based on current scene
     and matching the Zync convention of where these files should be stored.
 
@@ -1918,7 +1928,7 @@ class SubmitWindow(object):
     scene_path = cmds.file(q=True, loc=True)
     scene_head, _ = os.path.splitext(scene_path)
     scene_name = os.path.basename(scene_head)
-    return zync_conn.generate_file_path(
+    return window.zync_conn.generate_file_path(
         '%s.%s' % (scene_head, suffix)).replace('\\', '/')
 
   @staticmethod
@@ -1960,5 +1970,11 @@ class SubmitWindow(object):
     return True
 
 def submit_dialog():
-  submit_window = SubmitWindow()
-  submit_window.show()
+  try:
+    submit_window = SubmitWindow()
+    submit_window.show()
+  # Maya only prints the last line of the exception, so capture and log
+  # the full stacktrace before allowing the exception to propagate.
+  except:
+    print traceback.format_exc()
+    raise
