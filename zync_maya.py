@@ -160,6 +160,35 @@ def node_uses_image_sequence(node):
   return (cmds.getAttr('%s.useFrameExtension' % node) == True or
           '<udim>' in node_path or '<tile>' in node_path or 'u<u>_v<v>' in node_path)
 
+def _get_layer_overrides(attr):
+  """Gets any files set in layer overrides linked to the given
+  attribute.
+
+  Args:
+    attr: str, Maya attribute name, like file1.fileTextureName
+
+  Yields:
+    the value of any render layer overrides. this can be a str,
+    int, float - it depends on what type the attr itself is.
+  """
+  connections = cmds.listConnections(attr, plugs=True)
+  # listConnections can return None if there are no connections
+  if connections:
+    for connection in connections:
+      # listConnections gives us any "plugs" which are connected to
+      # the attribute. a plug represents the connection, not the actual
+      # value of the override. a plug is a str, like:
+      #   layer1.adjustments[1].plug
+      if connection:
+        # we only care when the plug refers to a render layer, as it
+        # will represent a render layer override.
+        node_name = connection.split('.')[0]
+        if cmds.nodeType(node_name) == 'renderLayer':
+          # turn the plug name into a value name, which looks
+          # like: layer1.adjustments[1].value
+          attr_name = '%s.value' % '.'.join(connection.split('.')[:-1])
+          yield cmds.getAttr(attr_name)
+
 def _file_handler(node):
   """Returns the file referenced by a Maya file node. Returned files may
   contain wildcards when they reference image sequences, for example an
@@ -171,6 +200,7 @@ def _file_handler(node):
   # in the job's scene_info, so we can properly path swap
   if node_uses_image_sequence(node):
     texture_path = seq_to_glob(texture_path) 
+  yield texture_path
   # if the Arnold "Use .tx" flag is on, look for a .tx version
   # of the texture as well
   try:
@@ -180,12 +210,13 @@ def _file_handler(node):
   if arnold_use_tx:
     try:
       head, ext = os.path.splitext(texture_path)
-      tx_path = '%s.tx' % (head,)
-      return [texture_path, tx_path]
+      tx_path = '%s.tx' % head
+      yield tx_path
     except:
-      return [texture_path]
-  else:
-    return [texture_path]
+      pass
+  # look for layer overrides set on the path
+  for override_path in _get_layer_overrides('%s.fileTextureName' % node):
+    yield override_path
 
 def _cache_file_handler(node):
   """Returns the files references by the given cacheFile node"""
