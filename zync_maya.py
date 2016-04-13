@@ -161,8 +161,7 @@ def node_uses_image_sequence(node):
           '<udim>' in node_path or '<tile>' in node_path or 'u<u>_v<v>' in node_path)
 
 def _get_layer_overrides(attr):
-  """Gets any files set in layer overrides linked to the given
-  attribute.
+  """Gets any files set in layer overrides linked to the given attribute.
 
   Args:
     attr: str, Maya attribute name, like file1.fileTextureName
