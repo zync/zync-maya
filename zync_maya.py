@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.1.1'
+__version__ = '1.1.2'
 
 import copy
 import hashlib
@@ -1743,6 +1743,18 @@ class SubmitWindow(object):
         cmds.file(rename=original_path)
         cmds.file(modified=original_modified)
         '''
+
+        if (cmds.objExists('vraySettings') and
+            cmds.attributeQuery('vrscene_on', node='vraySettings', exists=True) and
+            cmds.getAttr('vraySettings.vrscene_on')):
+          err_msg = ('You have "Export to a .vrscene file" turned on. This will '
+                     'cause Vray to attempt a scene export rather than a '
+                     'render. Please disable this option before submitting '
+                     'this scene to Zync for rendering.')
+          cmds.confirmDialog(title='Scene Set to Export',
+            message=err_msg,
+            button='OK', defaultButton='OK', icon='critical')
+          raise MayaZyncException(err_msg)
 
         if not window.verify_eula_acceptance(window.zync_conn):
           cmds.error('Job submission canceled.')
