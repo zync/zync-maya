@@ -460,8 +460,13 @@ def _rmsEnvLight_handler(node):
 
 
 def _openVDBRead_handler(node):
-  """Handles RMSEnvLight nodes"""
+  """Handles OpenVDBRead nodes"""
   yield cmds.getAttr('%s.file' % node)
+
+
+def _aiVolume_handler(node):
+  """Handles aiVolume nodes, Arnold volume grid files."""
+  yield cmds.getAttr('%s.filename' % node)
 
 
 def get_scene_files():
@@ -497,6 +502,7 @@ def get_scene_files():
     'PxrTexture': _pxrTexture_handler,
     'RMSEnvLight': _rmsEnvLight_handler,
     'OpenVDBRead': _openVDBRead_handler,
+    'aiVolume': _aiVolume_handler,
   }
 
   for file_type in file_types:
@@ -722,7 +728,6 @@ class MayaZyncException(Exception):
   def __init__(self, msg, *args, **kwargs):
     cmds.warning(msg)
     super(MayaZyncException, self).__init__(msg, *args, **kwargs)
-
 
 
 class ZyncAbortedByUser(Exception):
@@ -2019,6 +2024,7 @@ class SubmitWindow(object):
         return False
 
     return True
+
 
 def submit_dialog():
   try:
