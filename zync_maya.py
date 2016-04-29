@@ -1148,10 +1148,18 @@ class SubmitWindow(object):
     params['frange'] = eval_ui('frange', text=True)
     params['step'] = int(eval_ui('frame_step', text=True))
     params['chunk_size'] = int(eval_ui('chunk_size', text=True))
-    params['camera'] = eval_ui('camera', 'optionMenu', v=True)
     params['xres'] = int(eval_ui('x_res', text=True))
     params['yres'] = int(eval_ui('y_res', text=True))
     params['use_standalone'] = 0
+
+    params['camera'] = eval_ui('camera', 'optionMenu', v=True)
+    if not params['camera']:
+      err_msg = ('Please select a render camera. If the list is empty, try '
+                 'adding a renderable camera in your scene render settings.')
+      cmds.confirmDialog(title='Select a Camera',
+        message=err_msg,
+        button='OK', defaultButton='OK', icon='critical')
+      raise MayaZyncException(err_msg)
 
     if params['upload_only'] == 0 and params['renderer'] == 'vray':
       params['vray_nightly'] = int(eval_ui('vray_nightly', 'checkBox', v=True))
@@ -1304,7 +1312,10 @@ class SubmitWindow(object):
   def init_camera(self):
     cam_parents = [cmds.listRelatives(x, ap=True)[-1] for x in cmds.ls(cameras=True)]
     for cam in cam_parents:
-      if (cmds.getAttr(cam + '.renderable')) == True:
+      # only show renderable cameras, but look at render layer overrides to see
+      # if cameras are set to renderable in other layers
+      if (cmds.getAttr(cam + '.renderable') or
+          any(_get_layer_overrides('%s.renderable' % cam))):
         cmds.menuItem(parent='camera', label=cam)
 
   def init_output_dir(self):
