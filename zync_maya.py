@@ -588,7 +588,9 @@ def _get_xgen_collection_files(collection_name):
         yield os.path.join(dir_name, xg_file).replace('\\', '/')
   # search objects for files too
   for xg_desc in xgenm.descriptions(collection_name):
-    for xg_obj in xgenm.objects(collection_name, xg_desc):
+    obj_list = (xgenm.objects(collection_name, xg_desc) +
+                xgenm.fxModules(collection_name, xg_desc))
+    for xg_obj in obj_list:
       for xg_file in _get_xgen_object_files(collection_name, xg_desc, xg_obj):
         yield xg_file
 
@@ -625,6 +627,12 @@ def _get_xgen_object_files(collection_name, desc_name, object_name):
           toc_path = head + 'toc'
           if os.path.exists(toc_path):
             yield toc_path
+  other_attrs = [
+    'wiresFile',
+  ]
+  for other_attr in other_attrs:
+    if xgenm.attrExists(other_attr, collection_name, desc_name, object_name):
+      yield xgenm.getAttr(other_attr, collection_name, desc_name, object_name)
 
 def get_default_extension(renderer):
   """
