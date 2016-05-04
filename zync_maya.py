@@ -1866,8 +1866,13 @@ class SubmitWindow(object):
     # Any geo that has deformations are only rendered in the cached state and
     # not updated per frame. This is an issue with Vray and using 'vrend' instead
     # of BatchRender to export the vrscene.
-    cmds.setAttr('vraySettings.globopt_cache_geom_plugins', 0)
-    cmds.setAttr('vraySettings.globopt_cache_bitmaps', 0)
+    try:
+      cmds.setAttr('vraySettings.globopt_cache_geom_plugins', 0)
+      cmds.setAttr('vraySettings.globopt_cache_bitmaps', 0)
+    # older versions of Vray do not have these settings. if they don't exist a
+    # RuntimeError will be raised, which we can ignore.
+    except RuntimeError:
+      pass
 
     # Set compression options.
     cmds.setAttr('vraySettings.misc_meshAsHex', 1)
