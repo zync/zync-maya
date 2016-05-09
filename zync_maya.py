@@ -50,6 +50,14 @@ UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
 _XGEN_IMPORT_ERROR = None
 
+
+# a list of Xgen attributes which contain filenames we should include for upload
+_XGEN_FILE_ATTRS = [
+  'files',
+  'wiresFile',
+]
+
+
 import maya.cmds as cmds
 import maya.mel
 import maya.utils
@@ -598,41 +606,112 @@ def _get_xgen_object_files(collection_name, desc_name, object_name):
   """Get all files linked to an Xgen object."""
   if _XGEN_IMPORT_ERROR:
     raise NameError('Xgen is not loaded due to error: %s' % _XGEN_IMPORT_ERROR)
-  # Assume we only care if the object has a "files" attribute.
+  # the "files" attr requires some special parsing, handle this first
   if xgenm.attrExists('files', collection_name, desc_name, object_name):
-    xg_proj_path = xgenm.getAttr('xgProjectPath', collection_name)
-    # files attr has a rather strange format, which we must parse and attempt
-    # to infer file paths from. For example:
-    # #ArchiveGroup 0 name="stalagmite" thumbnail="stalagmite.png" description="No description." \
-    #   materials="${PROJECT}/xgen/archives/materials/stalagmite.ma" color=[1.0,0.0,0.0]\n0 \
-    #   "${PROJECT}/xgen/archives/abc/stalagmite.abc"
-    for attr in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+',
-        xgenm.getAttr('files', collection_name, desc_name, object_name)):
-      attr_split = attr.split('=')
-      current_file = None
-      if not attr_split:
-        pass
-      # Look for something that looks like a file path
-      elif len(attr_split) < 2 and (os.sep in attr or '/' in attr):
-        current_file = attr.strip('"').replace('${PROJECT}', xg_proj_path)
-      # Also catch materials= tags.
-      elif attr_split[0] == 'materials':
-        current_file = attr_split[1].strip('"').replace('${PROJECT}', xg_proj_path)
-      if current_file:
-        yield current_file
-        # If the file is a .gz archive, look for a toc file as well. Arnold archives
-        # in particular often require this.
-        if current_file.endswith('.gz'):
-          head, _ = os.path.splitext(current_file)
-          toc_path = head + 'toc'
-          if os.path.exists(toc_path):
-            yield toc_path
-  other_attrs = [
-    'wiresFile',
-  ]
-  for other_attr in other_attrs:
-    if xgenm.attrExists(other_attr, collection_name, desc_name, object_name):
-      yield xgenm.getAttr(other_attr, collection_name, desc_name, object_name)
+    for file_path in _get_files_from_files_attr(collection_name, desc_name,
+                                                object_name):
+      yield file_path
+  # look for other attributes which are expected to contain file paths
+  for file_attr in _XGEN_FILE_ATTRS:
+    # "files" attr is already handled above
+    if file_attr == 'files':
+      continue
+    if xgenm.attrExists(file_attr, collection_name, desc_name, object_name):
+      yield xgenm.getAttr(file_attr, collection_name, desc_name, object_name)
+  # search other attributes for file paths
+  for other_attr_file in _get_files_from_other_attrs(collection_name, desc_name,
+                                                     object_name):
+      yield other_attr_file
+
+
+def _get_files_from_files_attr(collection_name, desc_name, object_name):
+  """Get all files stored in the "files" attribute of an Xgen object."""
+  xg_proj_path = xgenm.getAttr('xgProjectPath', collection_name)
+  # files attr has a rather strange format, which we must parse and attempt
+  # to infer file paths from. For example:
+  # #ArchiveGroup 0 name="stalagmite" thumbnail="stalagmite.png" description="No description." \
+  #   materials="${PROJECT}/xgen/archives/materials/stalagmite.ma" color=[1.0,0.0,0.0]\n0 \
+  #   "${PROJECT}/xgen/archives/abc/stalagmite.abc"
+  for attr in re.findall(r'(?:[^\s,"]|"(?:\\.|[^"])*")+',
+      xgenm.getAttr('files', collection_name, desc_name, object_name)):
+    attr_split = attr.split('=')
+    current_file = None
+    if not attr_split:
+      pass
+    # Look for something that looks like a file path
+    elif len(attr_split) < 2 and ('/' in attr or '\\' in attr):
+      current_file = attr.strip('"').replace('${PROJECT}', xg_proj_path)
+    # Also catch materials= tags.
+    elif attr_split[0] == 'materials':
+      current_file = attr_split[1].strip('"').replace('${PROJECT}', xg_proj_path)
+    if current_file:
+      yield current_file
+      # If the file is a .gz archive, look for a toc file as well. Arnold archives
+      # in particular often require this.
+      if current_file.endswith('.gz'):
+        head, _ = os.path.splitext(current_file)
+        toc_path = head + 'toc'
+        if os.path.exists(toc_path):
+          yield toc_path
+
+
+def _get_files_from_other_attrs(collection_name, desc_name, object_name):
+  """Searches attributes of an Xgen object to try to detect file paths."""
+  for attr in xgenm.attrs(collection_name, desc_name, object_name):
+    # skip any attrs which probably contain plain file paths, which we've
+    # already collected above
+    if attr in _XGEN_FILE_ATTRS:
+      continue
+    attr_val = xgenm.getAttr(attr, collection_name, desc_name, object_name)
+    # the map() directive indicates an Xgen expression which reads in an image
+    # map and applies derives the attribute value from that image data, much
+    # like a texture map.
+    if 'map(' in attr_val:
+      opening_paren = attr_val.find('map(') + 4
+      closing_paren = _find_matching_paren(attr_val, opening_paren)
+      # if no matching paren was found just skip this attr - its probably a
+      # broken expression or a bit of code left in a comment
+      if closing_paren is None:
+        continue
+      file_path = attr_val[opening_paren:closing_paren].strip('"').strip("'")
+      # if the path starts with $, that means its path is based on an Xgen
+      # variable, usually ${DESC}. this means it is stored within the
+      # collection directory structure, and would have already been collected
+      # above
+      if file_path.startswith('$'):
+        continue
+      # if its a file, yield it. if its a directory, recurse into the directory
+      # and yield all files contained within
+      if os.path.isfile(file_path):
+        yield file_path.replace('\\', '/')
+      elif os.path.isdir(file_path):
+        for child_dir, subdir_list, file_list in os.walk(file_path):
+          for child_file in file_list:
+              yield os.path.join(child_dir, child_file).replace('\\', '/')
+
+
+def _find_matching_paren(some_string, opening_paren):
+  """Given a string and the position of an opening paren, returns the position
+  of the corresponding closing paren.
+
+  Args:
+    some_string: str, the string which contains the parens
+    opening_paren: int, index within some_string of the opening paren
+
+  Returns:
+    int, position of the corresponding closing paren, or None if none was found.
+  """
+  current_open_parens = 0
+  for i in range(opening_paren + 1, len(some_string)):
+    if some_string[i] == '(':
+      current_open_parens += 1
+    elif some_string[i] == ')':
+      if current_open_parens == 0:
+        return i
+      else:
+        current_open_parens -= 1
+  return None
+
 
 def get_default_extension(renderer):
   """
@@ -1521,6 +1600,10 @@ class SubmitWindow(object):
 
     print '--> files'
     scene_info['files'] = list(set(get_scene_files()))
+    # Xgen files are already included in the main files list, but we also
+    # include them separately so Zync can perform Xgen-related tasks on
+    # the much smaller subset
+    scene_info['xgen_files'] = list(set(get_xgen_files()))
 
     print '--> plugins'
     scene_info['plugins'] = []
