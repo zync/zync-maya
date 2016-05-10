@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.1.3'
+__version__ = '1.1.4'
 
 import copy
 import hashlib
@@ -70,17 +70,20 @@ except ImportError as e:
   _XGEN_IMPORT_ERROR = str(e)
   print 'Error loading Xgen API: %s' % _XGEN_IMPORT_ERROR
 
+
 def eval_ui(path, type='textField', **kwargs):
   """
   Returns the value from the given ui element.
   """
   return getattr(cmds, type)(path, query=True, **kwargs)
 
+
 def proj_dir():
   """
   Returns the Maya project directory of the current scene.
   """
   return cmds.workspace(q=True, rd=True)
+
 
 def frame_range():
   """
@@ -90,6 +93,20 @@ def frame_range():
   start = str(int(cmds.getAttr('defaultRenderGlobals.startFrame')))
   end = str(int(cmds.getAttr('defaultRenderGlobals.endFrame')))
   return '%s-%s' % (start, end)
+
+
+def get_render_layers():
+  """Get a list of all render layers in the scene."""
+  layers = []
+  try:
+    all_layers = cmds.ls(type='renderLayer', showNamespace=True)
+    for i in range(0, len(all_layers), 2):
+      if all_layers[i+1] == ':':
+        layers.append(all_layers[i])
+  except Exception:
+    layers = cmds.ls(type='renderLayer')
+  return layers
+
 
 def udim_range():
   bake_sets = list(bake_set for bake_set in cmds.ls(type='VRayBakeOptions') \
@@ -106,6 +123,7 @@ def udim_range():
     if uv_info[1][1] > v_max:
       v_max = int(math.ceil(uv_info[1][1]))
   return '1001-%d' % (1001+u_max+(10*v_max))
+
 
 def seq_to_glob(in_path):
   """Takes an image sequence path and returns it in glob format,
@@ -137,6 +155,7 @@ def seq_to_glob(in_path):
   else:
     return in_path
 
+
 def get_file_node_path(node):
   """Get the file path used by a Maya file node.
   Args:
@@ -154,6 +173,7 @@ def get_file_node_path(node):
   # otherwise use fileTextureName
   return cmds.getAttr('%s.fileTextureName' % node)
 
+
 def node_uses_image_sequence(node):
   """Determine if a node uses an image sequence or just a single image,
   not always obvious from its file path alone.
@@ -167,6 +187,7 @@ def node_uses_image_sequence(node):
   node_path = get_file_node_path(node).lower()
   return (cmds.getAttr('%s.useFrameExtension' % node) == True or
           '<udim>' in node_path or '<tile>' in node_path or 'u<u>_v<v>' in node_path)
+
 
 def _get_layer_overrides(attr):
   """Gets any files set in layer overrides linked to the given attribute.
@@ -195,6 +216,7 @@ def _get_layer_overrides(attr):
           # like: layer1.adjustments[1].value
           attr_name = '%s.value' % '.'.join(connection.split('.')[:-1])
           yield cmds.getAttr(attr_name)
+
 
 def _file_handler(node):
   """Returns the file referenced by a Maya file node. Returned files may
@@ -225,6 +247,7 @@ def _file_handler(node):
   for override_path in _get_layer_overrides('%s.fileTextureName' % node):
     yield override_path
 
+
 def _cache_file_handler(node):
   """Returns the files references by the given cacheFile node"""
   path = cmds.getAttr('%s.cachePath' % node)
@@ -233,6 +256,7 @@ def _cache_file_handler(node):
   yield '%s/%s.mc' % (path, cache_name)
   yield '%s/%s.mcx' % (path, cache_name)
   yield '%s/%s.xml' % (path, cache_name)
+
 
 def _diskCache_handler(node):
   """Given a diskCache node, returns path of cache file it
@@ -260,17 +284,21 @@ def _diskCache_handler(node):
                                     disk_cache_dir)
     yield os.path.join(disk_cache_dir, cache_name)
 
+
 def _vrmesh_handler(node):
   """Handles vray meshes"""
   yield cmds.getAttr('%s.fileName' % node)
+
 
 def _mrtex_handler(node):
   """Handles mentalrayTexutre nodes"""
   yield cmds.getAttr('%s.fileTextureName' % node)
 
+
 def _gpu_handler(node):
   """Handles gpuCache nodes"""
   yield cmds.getAttr('%s.cacheFileName' % node)
+
 
 def _mrOptions_handler(node):
   """Handles mentalrayOptions nodes, for Final Gather"""
@@ -286,13 +314,16 @@ def _mrOptions_handler(node):
     path += "*"
     yield path
 
+
 def _mrIbl_handler(node):
   """Handles mentalrayIblShape nodes"""
   yield cmds.getAttr('%s.texture' % node)
 
+
 def _abc_handler(node):
   """Handles AlembicNode nodes"""
   yield cmds.getAttr('%s.abc_File' % node)
+
 
 def _vrSettings_handler(node):
   """Handles VRaySettingsNode nodes, for irradiance map"""
@@ -305,6 +336,7 @@ def _vrSettings_handler(node):
       irmap = '%s*%s' % (irmap[:last_dot], irmap[last_dot:])
   yield irmap
   yield cmds.getAttr('%s.fnm' % node)
+
 
 def _particle_handler(node):
   project_dir = cmds.workspace(q=True, rd=True)
@@ -328,9 +360,11 @@ def _particle_handler(node):
     path = '%s/particles/%s/%s*' % (project_dir, scene_base, node_base)
   yield path
 
+
 def _ies_handler(node):
   """Handles VRayLightIESShape nodes, for IES lighting files"""
   yield cmds.getAttr('%s.iesFile' % node)
+
 
 def _fur_handler(node):
   """Handles FurDescription nodes"""
@@ -348,13 +382,16 @@ def _fur_handler(node):
         except:
           pass
 
+
 def _ptex_handler(node):
   """Handles Mental Ray ptex nodes"""
   yield cmds.getAttr('%s.S00' % node)
 
+
 def _substance_handler(node):
   """Handles Vray Substance nodes"""
   yield cmds.getAttr('%s.p' % node)
+
 
 def _imagePlane_handler(node):
   """Handles Image Planes"""
@@ -369,6 +406,7 @@ def _imagePlane_handler(node):
     except:
       yield texture_path
 
+
 def _mesh_handler(node):
   """Handles Mesh nodes, in case they are using MR Proxies"""
   for attr in ['%s.miProxyFile', '%s.rman__param___draFile']:
@@ -378,6 +416,7 @@ def _mesh_handler(node):
         yield proxy_path
     except:
       pass
+
 
 def _dynGlobals_handler(node):
   """Handles dynGlobals nodes"""
@@ -389,32 +428,40 @@ def _dynGlobals_handler(node):
     path = '%s/particles/%s/*' % (project_dir, cache_dir.strip())
     yield path
 
+
 def _aiStandIn_handler(node):
   """Handles aiStandIn nodes"""
   path = cmds.getAttr('%s.dso' % (node,))
   # change frame reference to wildcard pattern
   yield seq_to_glob(path)
 
+
 def _aiImage_handler(node):
   """Handles aiImage nodes"""
   yield cmds.getAttr('%s.filename' % node)
+
 
 def _aiPhotometricLight_handler(node):
   """Handles aiPhotometricLight nodes"""
   yield cmds.getAttr('%s.aiFilename' % node)
 
+
 def _exocortex_handler(node):
   """Handles Exocortex Alembic nodes"""
   yield cmds.getAttr('%s.fileName' % node)
 
+
 def _vrayPtex_handler(node):
   yield cmds.getAttr('%s.ptexFile' % node)
+
 
 def _vrayVolumeGrid_handler(node):
   yield cmds.getAttr('%s.if' % node)
 
+
 def _vrayScene_handler(node):
   yield cmds.getAttr('%s.fPath' % node)
+
 
 def _ribArchive_handler(node):
   """Handles RIB archive nodes"""
@@ -454,13 +501,16 @@ def _ribArchive_handler(node):
       for child_file in child_files:
         yield os.path.join(current_dir, child_file)
 
+
 def _pxrStdEnvMap_handler(node):
   """Handles PxrStdEnvMapLight nodes"""
   yield cmds.getAttr('%s.rman__EnvMap' % node)
 
+
 def _pxrTexture_handler(node):
   """Handles PxrTexture nodes"""
   yield cmds.getAttr('%s.filename' % node)
+
 
 def _rmsEnvLight_handler(node):
   """Handles RMSEnvLight nodes"""
@@ -529,6 +579,7 @@ def get_scene_files():
   except NameError as e:
     print 'error retrieving Xgen file list: %s' % str(e)
 
+
 def get_xgen_files():
   """Yield all Xgen file dependencies in the scene."""
   # Get collection list, if the call fails due to Xgen not being
@@ -554,6 +605,7 @@ def get_xgen_files():
     for xgen_file in _get_xgen_collection_files(collection):
       print 'found Xgen collection file: %s' % xgen_file
       yield xgen_file
+
 
 def _get_xgen_collection_definition(collection_name):
   """Yield Xgen collection direct dependencies.
@@ -581,6 +633,7 @@ def _get_xgen_collection_definition(collection_name):
   for filename in filenames:
     yield os.path.join(scene_dir, filename).replace('\\', '/')
 
+
 def _get_xgen_collection_files(collection_name):
   """Get Xgen indirect dependencies, specifically files stored
   in related objects."""
@@ -601,6 +654,7 @@ def _get_xgen_collection_files(collection_name):
     for xg_obj in obj_list:
       for xg_file in _get_xgen_object_files(collection_name, xg_desc, xg_obj):
         yield xg_file
+
 
 def _get_xgen_object_files(collection_name, desc_name, object_name):
   """Get all files linked to an Xgen object."""
@@ -732,6 +786,7 @@ def get_default_extension(renderer):
   else:
     return val.split()[-1][1:-1]
 
+
 LAYER_INFO = {}
 def collect_layer_info(layer, renderer):
   cur_layer = cmds.editRenderLayerGlobals(q=True, currentRenderLayer=True)
@@ -766,15 +821,18 @@ def collect_layer_info(layer, renderer):
   cmds.editRenderLayerGlobals(currentRenderLayer=cur_layer)
   return layer_info
 
+
 def clear_layer_info():
   global LAYER_INFO
   LAYER_INFO = {}
+
 
 def get_layer_override(layer, renderer, field):
   global LAYER_INFO
   if layer not in LAYER_INFO:
     LAYER_INFO[layer] = collect_layer_info(layer, renderer)
   return LAYER_INFO[layer][field]
+
 
 def get_maya_version():
   """Returns the current major Maya version in use."""
@@ -784,6 +842,7 @@ def get_maya_version():
   # find the major version.
   #
   return str(int(float(maya.mel.eval('about -api')) / 100))
+
 
 def _rman_translate_format_to_extension(format):
   """Translate an image format to the extension of files it
@@ -807,6 +866,289 @@ def _rman_translate_format_to_extension(format):
   except ValueError:
     return format
   return formats_list[format_index+1]
+
+
+def get_scene_info(renderer, layers_to_render, is_bake):
+  """Returns scene info for the current scene."""
+
+  print '--> initializing'
+  clear_layer_info()
+
+  print '--> render layers'
+  scene_info = {'render_layers': get_render_layers()}
+
+  print '--> checking selections'
+  if is_bake:
+    selected_bake_sets = layers_to_render
+    if selected_bake_sets == None:
+      selected_bake_sets = []
+    selected_layers = []
+  else:
+    selected_layers = layers_to_render
+    if selected_layers == None:
+      selected_layers = []
+    selected_bake_sets = []
+
+  # Detect a list of referenced files. We must use ls() instead of file(q=True, r=True)
+  # because the latter will only detect references one level down, not nested references.
+  print '--> references'
+  scene_info['references'] = []
+  scene_info['unresolved_references'] = []
+  for ref_node in cmds.ls(type='reference'):
+    try:
+      scene_info['references'].append(cmds.referenceQuery(ref_node, filename=True))
+      scene_info['unresolved_references'].append(
+        cmds.referenceQuery(ref_node, filename=True, unresolvedName=True))
+    except:
+      pass
+
+  print '--> render passes'
+  scene_info['render_passes'] = {}
+  if renderer == 'vray' and cmds.getAttr('vraySettings.imageFormatStr') != 'exr (multichannel)':
+    pass_list = cmds.ls(type='VRayRenderElement')
+    pass_list += cmds.ls(type='VRayRenderElementSet')
+    if len(pass_list) > 0:
+      for layer in selected_layers:
+        scene_info['render_passes'][layer] = []
+        enabled_passes = get_layer_override(layer, renderer, 'render_passes')
+        for r_pass in pass_list:
+          if r_pass in enabled_passes:
+            vray_name = None
+            vray_explicit_name = None
+            vray_file_name = None
+            for attr_name in cmds.listAttr(r_pass):
+              if attr_name.startswith('vray_filename'):
+                vray_file_name = cmds.getAttr('%s.%s' % (r_pass, attr_name))
+              elif attr_name.startswith('vray_name'):
+                vray_name = cmds.getAttr('%s.%s' % (r_pass, attr_name))
+              elif attr_name.startswith('vray_explicit_name'):
+                vray_explicit_name = cmds.getAttr('%s.%s' % (r_pass, attr_name))
+            if vray_file_name != None and vray_file_name != "":
+              final_name = vray_file_name
+            elif vray_explicit_name != None and vray_explicit_name != "":
+              final_name = vray_explicit_name
+            elif vray_name != None and vray_name != "":
+              final_name = vray_name
+            else:
+              continue
+            # special case for Material Select elements - these are named based on the material
+            # they are connected to.
+            if 'vray_mtl_mtlselect' in cmds.listAttr(r_pass):
+              connections = cmds.listConnections('%s.vray_mtl_mtlselect' % (r_pass,))
+              if connections:
+                final_name += '_%s' % (str(connections[0]),)
+            scene_info['render_passes'][layer].append(final_name)
+
+  print '--> bake sets'
+  scene_info['bake_sets'] = {}
+  for bake_set in selected_bake_sets:
+    scene_info['bake_sets'][bake_set] = {
+      'uvs': _get_bake_set_uvs(bake_set),
+      'map': _get_bake_set_map(bake_set),
+      'shape': _get_bake_set_shape(bake_set),
+      'output_path': _get_bake_set_output_path(bake_set),
+    }
+
+  print '--> frame extension & padding'
+  if renderer == 'vray':
+    scene_info['extension'] = cmds.getAttr('vraySettings.imageFormatStr')
+    if scene_info['extension'] == None:
+      scene_info['extension'] = 'png'
+    scene_info['padding'] = int(cmds.getAttr('vraySettings.fileNamePadding'))
+  elif renderer == 'mr':
+    scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
+    if not scene_info['extension']:
+      scene_info['extension'] = get_default_extension(renderer)
+    scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
+  elif renderer == 'arnold':
+    scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
+    scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
+  elif renderer == 'renderman':
+    if cmds.getAttr('defaultRenderGlobals.outFormatControl'):
+      scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.outFormatExt').lstrip('.')
+    else:
+      scene_info['extension'] = _rman_translate_format_to_extension(
+          cmds.getAttr('rmanFinalOutputGlobals0.rman__riopt__Display_type'))
+    scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
+  scene_info['extension'] = scene_info['extension'][:3]
+
+  # collect a dict of attrs that define how output frames have frame numbers
+  # and extension added to their names.
+  if renderer == 'arnold':
+    print '--> output name format'
+    scene_info['output_name_format'] = {}
+    attr_list = {
+      'outFormatControl',
+      'animation',
+      'putFrameBeforeExt',
+      'periodInExt',
+      'extensionPadding',
+    }
+    for name_attr in attr_list:
+      if cmds.attributeQuery(name_attr, n='defaultRenderGlobals', ex=True):
+        scene_info['output_name_format'][name_attr] = cmds.getAttr('defaultRenderGlobals.%s' % name_attr)
+
+  print '--> output file prefixes'
+  prefix = get_layer_override('defaultRenderLayer', renderer, 'prefix')
+  scene_info['file_prefix'] = [prefix]
+  prefixes_to_verify = [prefix]
+  layer_prefixes = {}
+  for layer in selected_layers:
+    layer_prefix = get_layer_override(layer, renderer, 'prefix')
+    if layer_prefix != None:
+      layer_prefixes[layer] = layer_prefix
+      prefixes_to_verify.append(layer_prefix)
+  scene_info['file_prefix'].append(layer_prefixes)
+
+  print '--> files'
+  scene_info['files'] = list(set(get_scene_files()))
+  # Xgen files are already included in the main files list, but we also
+  # include them separately so Zync can perform Xgen-related tasks on
+  # the much smaller subset
+  scene_info['xgen_files'] = list(set(get_xgen_files()))
+
+  print '--> plugins'
+  scene_info['plugins'] = []
+  plugin_list = cmds.pluginInfo(query=True, pluginsInUse=True)
+  for i in range(0, len(plugin_list), 2):
+    scene_info['plugins'].append(str(plugin_list[i]))
+
+  # detect MentalCore
+  if renderer == 'mr':
+    mentalcore_used = False
+    try:
+      mc_nodes = cmds.ls(type='core_globals')
+      if len(mc_nodes) == 0:
+        mentalcore_used = False
+      else:
+        mc_node = mc_nodes[0]
+        if cmds.getAttr('%s.ec' % (mc_node,)) == True:
+          mentalcore_used = True
+        else:
+          mentalcore_used = False
+    except:
+      mentalcore_used = False
+  else:
+    mentalcore_used = False
+  if mentalcore_used:
+    scene_info['plugins'].append('mentalcore')
+
+  # detect use of cache files
+  if len(cmds.ls(type='cacheFile')) > 0:
+    scene_info['plugins'].append('cache')
+
+  print '--> maya version'
+  scene_info['version'] = get_maya_version()
+
+  scene_info['vray_version'] = ''
+  if renderer == 'vray':
+    print '--> vray version'
+    try:
+      scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
+    except Exception as e:
+      print str(e)
+      raise MayaZyncException('Could not detect Vray version. This is required to render Vray jobs. Do you have the Vray plugin loaded?')
+
+  scene_info['arnold_version'] = ''
+  if renderer == 'arnold':
+    print '--> arnold version'
+    try:
+      scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True))
+    except Exception as e:
+      print str(e)
+      raise MayaZyncException('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
+
+  if renderer == 'renderman':
+    print '--> renderman version'
+    try:
+      # Zync needs the prman version, not the RfM plugin version. until recently
+      # these were not synchronized. prman version comes back like "prman 20.7 @1571626"
+      scene_info['renderman_version'] = str(maya.mel.eval('rman getversion prman').split()[1])
+    except Exception as e:
+      print str(e)
+      raise MayaZyncException('Could not detect Renderman version. This is required to render Renderman jobs. Do you have the Renderman plugin loaded?')
+
+  # If this is an Arnold job and AOVs are on, include a list of AOV
+  # names in scene_info. If "Merge AOVs" is on, i.e. multichannel EXRs,
+  # the AOVs will be rendered in a single image, so consider AOVs to be
+  # OFF for purposes of the Zync job.
+  if renderer == 'arnold':
+    try:
+      aov_on = (cmds.getAttr('defaultArnoldRenderOptions.aovMode') and
+        not cmds.getAttr('defaultArnoldDriver.mergeAOVs'))
+      override_prefix = cmds.getAttr('defaultArnoldDriver.prefix')
+    except:
+      aov_on = False
+      override_prefix = ''
+    if aov_on:
+      print '--> AOVs'
+      scene_info['aovs'] = [cmds.getAttr('%s.name' % (n,)) for n in cmds.ls(type='aiAOV')]
+
+      if scene_info['aovs']:
+        # Here goes verification of the output prefixes. Once the AOVs are about
+        # to render into the separate files, output prefix is suppose to contain
+        # <RenderPass> tag. The regular prefixes can be override by the one set
+        # up in the defaultArnoldDriver
+        output_prefix_aov_warning = False
+        for output in prefixes_to_verify:
+          if '<RenderPass>' not in output:
+            output_prefix_aov_warning = True
+        if (output_prefix_aov_warning and not override_prefix) or \
+            (override_prefix and '<RenderPass>' not in override_prefix):
+          confirm_mesage = 'Yes, I want to send it.'
+          cancel_message = 'No, do not send.'
+          AOV_dialog_result = cmds.confirmDialog(
+              title='RenderPass tag missing',
+              message='AOVs are selected to render into separate files, but the '
+                      'output prefix of one of the layers does not contain '
+                      '<RenderPass> tag. Are you sure the configuration is correct?',
+              button=(confirm_mesage, cancel_message),
+              defaultButton=confirm_mesage,
+              cancelButton=cancel_message,
+              icon='warning')
+          if AOV_dialog_result != confirm_mesage:
+            raise ZyncAbortedByUser('Aborted by user')
+
+    else:
+      scene_info['aovs'] = []
+
+  return scene_info
+
+
+def _get_bake_set_uvs(bake_set):
+  conn_list = cmds.listConnections(bake_set)
+  if conn_list == None or len(conn_list) == 0:
+    return None
+  return cmds.polyEvaluate(conn_list[0], b2=True)
+
+
+def _get_bake_set_map(bake_set):
+  return cmds.getAttr('%s.bakeChannel' % bake_set)
+
+
+def _get_bake_set_shape(bake_set):
+  transforms = cmds.listConnections(bake_set)
+  if transforms == None or len(transforms) == 0:
+    return None
+  transform = transforms[0]
+  shape_nodes = cmds.listRelatives(transform)
+  if shape_nodes == None or len(shape_nodes) == 0:
+    return None
+  return shape_nodes[0]
+
+
+def _get_bake_set_output_path(bake_set):
+  out_path = cmds.getAttr('%s.outputTexturePath' % bake_set)
+  out_path = out_path.replace('\\', '/')
+  if out_path[0] == '/' or out_path[1] == ':':
+    full_path = out_path
+  else:
+    full_path = proj_dir().replace('\\', '/')
+    if full_path[-1] != '/':
+      full_path += '/'
+    full_path += out_path
+  return full_path
+
 
 class MayaZyncException(Exception):
   """
@@ -1150,37 +1492,6 @@ class SubmitWindow(object):
     #     raise Exception(msg)
     pass
 
-  def get_bake_set_uvs(self, bake_set):
-    conn_list = cmds.listConnections(bake_set)
-    if conn_list == None or len(conn_list) == 0:
-      return None
-    return cmds.polyEvaluate(conn_list[0], b2=True)
-
-  def get_bake_set_map(self, bake_set):
-    return cmds.getAttr('%s.bakeChannel' % (bake_set,))
-
-  def get_bake_set_shape(self, bake_set):
-    transforms = cmds.listConnections(bake_set)
-    if transforms == None or len(transforms) == 0:
-      return None
-    transform = transforms[0]
-    shape_nodes = cmds.listRelatives(transform)
-    if shape_nodes == None or len(shape_nodes) == 0:
-      return None
-    return shape_nodes[0]
-
-  def get_bake_set_output_path(self, bake_set):
-    out_path = cmds.getAttr('%s.outputTexturePath' % (bake_set,))
-    out_path = out_path.replace('\\', '/')
-    if out_path[0] == '/' or out_path[1] == ':':
-      full_path = out_path
-    else:
-      full_path = proj_dir().replace('\\', '/')
-      if full_path[-1] != '/':
-        full_path += '/'
-      full_path += out_path
-    return full_path
-
   def get_render_params(self):
     """
     Returns a dict of all the render parameters set on the UI
@@ -1306,14 +1617,7 @@ class SubmitWindow(object):
   #
 
   def init_layers(self):
-    self.layers = []
-    try:
-      all_layers = cmds.ls(type='renderLayer', showNamespace=True)
-      for i in range(0, len(all_layers), 2):
-        if all_layers[i+1] == ':':
-          self.layers.append(all_layers[i])
-    except Exception:
-      self.layers = cmds.ls(type='renderLayer')
+    self.layers = get_render_layers()
 
   def init_existing_project_name(self):
     self.projects = self.zync_conn.get_project_list()
@@ -1462,256 +1766,6 @@ class SubmitWindow(object):
         return renderer
     return None
 
-  def get_scene_info(self, renderer):
-    """
-    Returns scene info for the current scene.
-    """
-
-    print '--> initializing'
-    clear_layer_info()
-
-    print '--> render layers'
-    scene_info = {'render_layers': self.layers}
-
-    print '--> checking selections'
-    if eval_ui('job_type', type='optionMenu', v=True).lower() == 'bake':
-      selected_bake_sets = eval_ui('layers', 'textScrollList', ai=True, si=True)
-      if selected_bake_sets == None:
-        selected_bake_sets = []
-      selected_layers = []
-    else:
-      selected_layers = eval_ui('layers', 'textScrollList', ai=True, si=True)
-      if selected_layers == None:
-        selected_layers = []
-      selected_bake_sets = []
-
-    #
-    #  Detect a list of referenced files. We must use ls() instead of file(q=True, r=True)
-    #  because the latter will only detect references one level down, not nested references.
-    #
-    print '--> references'
-    scene_info['references'] = []
-    scene_info['unresolved_references'] = []
-    for ref_node in cmds.ls(type='reference'):
-      try:
-        scene_info['references'].append(cmds.referenceQuery(ref_node, filename=True))
-        scene_info['unresolved_references'].append(
-          cmds.referenceQuery(ref_node, filename=True, unresolvedName=True))
-      except:
-        pass
-
-    print '--> render passes'
-    scene_info['render_passes'] = {}
-    if renderer == 'vray' and cmds.getAttr('vraySettings.imageFormatStr') != 'exr (multichannel)':
-      pass_list = cmds.ls(type='VRayRenderElement')
-      pass_list += cmds.ls(type='VRayRenderElementSet')
-      if len(pass_list) > 0:
-        for layer in selected_layers:
-          scene_info['render_passes'][layer] = []
-          enabled_passes = get_layer_override(layer, renderer, 'render_passes')
-          for r_pass in pass_list:
-            if r_pass in enabled_passes:
-              vray_name = None
-              vray_explicit_name = None
-              vray_file_name = None
-              for attr_name in cmds.listAttr(r_pass):
-                if attr_name.startswith('vray_filename'):
-                  vray_file_name = cmds.getAttr('%s.%s' % (r_pass, attr_name))
-                elif attr_name.startswith('vray_name'):
-                  vray_name = cmds.getAttr('%s.%s' % (r_pass, attr_name))
-                elif attr_name.startswith('vray_explicit_name'):
-                  vray_explicit_name = cmds.getAttr('%s.%s' % (r_pass, attr_name))
-              if vray_file_name != None and vray_file_name != "":
-                final_name = vray_file_name
-              elif vray_explicit_name != None and vray_explicit_name != "":
-                final_name = vray_explicit_name
-              elif vray_name != None and vray_name != "":
-                final_name = vray_name
-              else:
-                continue
-              # special case for Material Select elements - these are named based on the material
-              # they are connected to.
-              if 'vray_mtl_mtlselect' in cmds.listAttr(r_pass):
-                connections = cmds.listConnections('%s.vray_mtl_mtlselect' % (r_pass,))
-                if connections:
-                  final_name += '_%s' % (str(connections[0]),)
-              scene_info['render_passes'][layer].append(final_name)
-
-    print '--> bake sets'
-    scene_info['bake_sets'] = {}
-    for bake_set in selected_bake_sets:
-      scene_info['bake_sets'][bake_set] = {
-        'uvs': self.get_bake_set_uvs(bake_set),
-        'map': self.get_bake_set_map(bake_set),
-        'shape': self.get_bake_set_shape(bake_set),
-        'output_path': self.get_bake_set_output_path(bake_set)
-      }
-
-    print '--> frame extension & padding'
-    if renderer == 'vray':
-      scene_info['extension'] = cmds.getAttr('vraySettings.imageFormatStr')
-      if scene_info['extension'] == None:
-        scene_info['extension'] = 'png'
-      scene_info['padding'] = int(cmds.getAttr('vraySettings.fileNamePadding'))
-    elif renderer == 'mr':
-      scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
-      if not scene_info['extension']:
-        scene_info['extension'] = get_default_extension(renderer)
-      scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
-    elif renderer == 'arnold':
-      scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
-      scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
-    elif renderer == 'renderman':
-      if cmds.getAttr('defaultRenderGlobals.outFormatControl'):
-        scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.outFormatExt').lstrip('.')
-      else:
-        scene_info['extension'] = _rman_translate_format_to_extension(
-            cmds.getAttr('rmanFinalOutputGlobals0.rman__riopt__Display_type'))
-      scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
-    scene_info['extension'] = scene_info['extension'][:3]
-
-    # collect a dict of attrs that define how output frames have frame numbers
-    # and extension added to their names.
-    if renderer == 'arnold':
-      print '--> output name format'
-      scene_info['output_name_format'] = {}
-      attr_list = {
-        'outFormatControl',
-        'animation',
-        'putFrameBeforeExt',
-        'periodInExt',
-        'extensionPadding',
-      }
-      for name_attr in attr_list:
-        if cmds.attributeQuery(name_attr, n='defaultRenderGlobals', ex=True):
-          scene_info['output_name_format'][name_attr] = cmds.getAttr('defaultRenderGlobals.%s' % name_attr)
-
-    print '--> output file prefixes'
-    prefix = get_layer_override('defaultRenderLayer', renderer, 'prefix')
-    scene_info['file_prefix'] = [prefix]
-    prefixes_to_verify = [prefix]
-    layer_prefixes = {}
-    for layer in selected_layers:
-      layer_prefix = get_layer_override(layer, renderer, 'prefix')
-      if layer_prefix != None:
-        layer_prefixes[layer] = layer_prefix
-        prefixes_to_verify.append(layer_prefix)
-    scene_info['file_prefix'].append(layer_prefixes)
-
-    print '--> files'
-    scene_info['files'] = list(set(get_scene_files()))
-    # Xgen files are already included in the main files list, but we also
-    # include them separately so Zync can perform Xgen-related tasks on
-    # the much smaller subset
-    scene_info['xgen_files'] = list(set(get_xgen_files()))
-
-    print '--> plugins'
-    scene_info['plugins'] = []
-    plugin_list = cmds.pluginInfo(query=True, pluginsInUse=True)
-    for i in range(0, len(plugin_list), 2):
-      scene_info['plugins'].append(str(plugin_list[i]))
-
-    # detect MentalCore
-    if renderer == 'mr':
-      mentalcore_used = False
-      try:
-        mc_nodes = cmds.ls(type='core_globals')
-        if len(mc_nodes) == 0:
-          mentalcore_used = False
-        else:
-          mc_node = mc_nodes[0]
-          if cmds.getAttr('%s.ec' % (mc_node,)) == True:
-            mentalcore_used = True
-          else:
-            mentalcore_used = False
-      except:
-        mentalcore_used = False
-    else:
-      mentalcore_used = False
-    if mentalcore_used:
-      scene_info['plugins'].append('mentalcore')
-
-    # detect use of cache files
-    if len(cmds.ls(type='cacheFile')) > 0:
-      scene_info['plugins'].append('cache')
-
-    print '--> maya version'
-    scene_info['version'] = get_maya_version()
-
-    scene_info['vray_version'] = ''
-    if renderer == 'vray':
-      print '--> vray version'
-      try:
-        scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
-      except Exception as e:
-        print str(e)
-        raise MayaZyncException('Could not detect Vray version. This is required to render Vray jobs. Do you have the Vray plugin loaded?')
-
-    scene_info['arnold_version'] = ''
-    if renderer == 'arnold':
-      print '--> arnold version'
-      try:
-        scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True))
-      except Exception as e:
-        print str(e)
-        raise MayaZyncException('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
-
-    if renderer == 'renderman':
-      print '--> renderman version'
-      try:
-        # Zync needs the prman version, not the RfM plugin version. until recently
-        # these were not synchronized. prman version comes back like "prman 20.7 @1571626"
-        scene_info['renderman_version'] = str(maya.mel.eval('rman getversion prman').split()[1])
-      except Exception as e:
-        print str(e)
-        raise MayaZyncException('Could not detect Renderman version. This is required to render Renderman jobs. Do you have the Renderman plugin loaded?')
-
-    # If this is an Arnold job and AOVs are on, include a list of AOV
-    # names in scene_info. If "Merge AOVs" is on, i.e. multichannel EXRs,
-    # the AOVs will be rendered in a single image, so consider AOVs to be
-    # OFF for purposes of the Zync job.
-    if renderer == 'arnold':
-      try:
-        aov_on = (cmds.getAttr('defaultArnoldRenderOptions.aovMode') and
-          not cmds.getAttr('defaultArnoldDriver.mergeAOVs'))
-        override_prefix = cmds.getAttr('defaultArnoldDriver.prefix')
-      except:
-        aov_on = False
-        override_prefix = ''
-      if aov_on:
-        print '--> AOVs'
-        scene_info['aovs'] = [cmds.getAttr('%s.name' % (n,)) for n in cmds.ls(type='aiAOV')]
-
-        if scene_info['aovs']:
-          # Here goes verification of the output prefixes. Once the AOVs are about
-          # to render into the separate files, output prefix is suppose to contain
-          # <RenderPass> tag. The regular prefixes can be override by the one set
-          # up in the defaultArnoldDriver
-          output_prefix_aov_warning = False
-          for output in prefixes_to_verify:
-            if '<RenderPass>' not in output:
-              output_prefix_aov_warning = True
-          if (output_prefix_aov_warning and not override_prefix) or \
-              (override_prefix and '<RenderPass>' not in override_prefix):
-            confirm_mesage = 'Yes, I want to send it.'
-            cancel_message = 'No, Do not send.'
-            AOV_dialog_result = cmds.confirmDialog(
-                title='RenderPass tag missing',
-                message='AOVs are selected to render into separate files, but the '
-                        'output prefix of one of the layers does not contain '
-                        '<RenderPass> tag. Are you sure the configuration is correct?',
-                button=(confirm_mesage, cancel_message),
-                defaultButton=confirm_mesage,
-                cancelButton=cancel_message,
-                icon='warning')
-            if AOV_dialog_result != confirm_mesage:
-              raise ZyncAbortedByUser('Aborted by user')
-
-      else:
-        scene_info['aovs'] = []
-
-    return scene_info
-
   def set_user_label(self, username):
     cmds.text('google_login_status', e=True, label='Logged in as %s' % username)
 
@@ -1773,7 +1827,9 @@ class SubmitWindow(object):
 
     print 'Collecting scene info...'
     try:
-      params['scene_info'] = window.get_scene_info(params['renderer'])
+      params['scene_info'] = get_scene_info(params['renderer'],
+                                            params['layers'].split(','),
+                                            (eval_ui('job_type', type='optionMenu', v=True).lower() == 'bake'))
     except ZyncAbortedByUser:
       # If the job is aborted just finish the submit function
       return
