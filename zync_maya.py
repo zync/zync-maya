@@ -19,6 +19,7 @@ __version__ = '1.1.4'
 import copy
 import hashlib
 import math
+import md5
 import os
 import platform
 import re
@@ -2121,7 +2122,8 @@ class SubmitWindow(object):
     layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
 
     ass_base, ext = os.path.splitext(ass_path)
-    layer_file = '%s_%s%s' % (ass_base, layer, ext)
+    layer_mangled = md5.new(layer).hexdigest()[:4]
+    layer_file = '%s_%s_%s%s' % (ass_base, layer, layer_mangled, ext)
     layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
 
     ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, end_frame) +
