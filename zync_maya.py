@@ -509,7 +509,11 @@ def _pxrStdEnvMap_handler(node):
 
 def _pxrTexture_handler(node):
   """Handles PxrTexture nodes"""
-  yield cmds.getAttr('%s.filename' % node)
+  filename = cmds.getAttr('%s.filename' % node)
+  if cmds.getAttr('%s.atlasStyle' % node) == 0:
+    yield filename
+  else:
+    yield re.sub('_MAPID_', '*', filename)
 
 
 def _rmsEnvLight_handler(node):
