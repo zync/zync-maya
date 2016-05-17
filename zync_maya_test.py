@@ -23,8 +23,13 @@ import os
 import platform
 import pprint
 import subprocess
+import sys
 import tempfile
 import unittest
+
+
+class MayaFailedException(Exception):
+  pass
 
 
 def _get_maya_bin():
@@ -39,7 +44,7 @@ def _get_maya_bin():
     return '/usr/autodesk/maya2016/bin/maya'
 
 
-def _unicode_to_str(input):
+def _unicode_to_str(input_obj):
   """Returns a version of the input with all unicode replaced by standard
   strings.
 
@@ -47,18 +52,18 @@ def _unicode_to_str(input):
   easier comparison.
 
   Args:
-    input: whatever input you want to convert - dict, list, str, etc. will
-           recurse into that object to convert all unicode values
+    input_obj: whatever input you want to convert - dict, list, str, etc. will
+               recurse into that object to convert all unicode values
   """
-  if isinstance(input, dict):
+  if isinstance(input_obj, dict):
     return {_unicode_to_str(key): _unicode_to_str(value)
-            for key, value in input.iteritems()}
-  elif isinstance(input, list):
-    return [_unicode_to_str(element) for element in input]
-  elif isinstance(input, unicode):
-    return input.encode('utf-8')
+            for key, value in input_obj.iteritems()}
+  elif isinstance(input_obj, list):
+    return [_unicode_to_str(element) for element in input_obj]
+  elif isinstance(input_obj, unicode):
+    return input_obj.encode('utf-8')
   else:
-    return input
+    return input_obj
 
 
 class TestMayaScene(unittest.TestCase):
@@ -105,14 +110,23 @@ class TestMayaScene(unittest.TestCase):
       # script, and exits.
       cmd = '%s -batch -script %s -file "%s"' % (_get_maya_bin(), mel_script.name, self.scene_file)
       p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-      p.communicate()
+      out, err = p.communicate()
+      if p.returncode:
+        raise MayaFailedException(('maya failed to run. rc: %d, stdout: %s, '
+                                   'stderr: %s') % (p.returncode, out, err))
 
       # Read in the scene info from file and clean up.
       with os.fdopen(scene_info_fd) as fp:
         scene_info_raw = fp.read()
       os.remove(scene_info_file)
 
-    scene_info_from_scene = _unicode_to_str(ast.literal_eval(scene_info_raw))
+    try:
+      scene_info_from_scene = _unicode_to_str(ast.literal_eval(scene_info_raw))
+    except SyntaxError:
+      print 'SyntaxError parsing scene_info.'
+      print 'maya stdout: %s' % out
+      print 'maya stderr: %s' % err
+      raise
 
     # sort the file list from each set of scene info so we don't raise errors
     # caused only by file lists being in different orders
@@ -136,7 +150,11 @@ def main():
 
   suite = unittest.TestSuite()
   suite.addTest(TestMayaScene('test_scene_info', args.scene, args.info_file))
-  unittest.TextTestRunner().run(suite)
+  test_result = unittest.TextTestRunner().run(suite)
+
+  # since we're not using unittest.main, we need to manually provide an
+  # exit code or the script will report 0 even if the test failed.
+  sys.exit(not test_result.wasSuccessful())
 
 
 if __name__ == '__main__':

@@ -72,11 +72,11 @@ except ImportError as e:
   print 'Error loading Xgen API: %s' % _XGEN_IMPORT_ERROR
 
 
-def eval_ui(path, type='textField', **kwargs):
+def eval_ui(path, ui_type='textField', **kwargs):
   """
   Returns the value from the given ui element.
   """
-  return getattr(cmds, type)(path, query=True, **kwargs)
+  return getattr(cmds, ui_type)(path, query=True, **kwargs)
 
 
 def proj_dir():
@@ -849,12 +849,12 @@ def get_maya_version():
   return str(int(float(maya.mel.eval('about -api')) / 100))
 
 
-def _rman_translate_format_to_extension(format):
+def _rman_translate_format_to_extension(image_format):
   """Translate an image format to the extension of files it
   generates. For example, "openexr" becomes "exr".
 
   Args:
-    format: str, the image format
+    image_format: str, the image format
 
   Returns:
     str, the output extension. If the format is unrecognized, the
@@ -867,9 +867,9 @@ def _rman_translate_format_to_extension(format):
   # look for the format, then return the next item in the string
   # if the format isn't found, return it as is.
   try:
-    format_index = formats_list.index(format)
+    format_index = formats_list.index(image_format)
   except ValueError:
-    return format
+    return image_format
   return formats_list[format_index+1]
 
 
@@ -1155,6 +1155,16 @@ def _get_bake_set_output_path(bake_set):
   return full_path
 
 
+def _unused(*args):
+  """Method to mark a variable as unused.
+
+  Args:
+    *args: does nothing
+  """
+  _ = args
+  pass
+
+
 class MayaZyncException(Exception):
   """
   This exception issues a Maya warning.
@@ -1324,7 +1334,7 @@ class SubmitWindow(object):
       cmds.checkBox('skip_check', e=True, en=True)
       cmds.textField('output_dir', e=True, en=True)
       cmds.optionMenu('renderer', e=True, en=True)
-      if eval_ui('renderer', type='optionMenu', v=True) in ('vray', 'V-Ray'):
+      if eval_ui('renderer', ui_type='optionMenu', v=True) in ('vray', 'V-Ray'):
         cmds.checkBox('vray_nightly', e=True, en=True)
         cmds.checkBox('use_standalone', e=True, en=True)
         cmds.checkBox('distributed', e=True, en=True)
@@ -1352,9 +1362,13 @@ class SubmitWindow(object):
     cmds.checkBox('use_standalone', e=True, en=not checked, value=checked)
 
   def change_num_instances(self, *args, **kwargs):
+    _unused(args)
+    _unused(kwargs)
     self.update_est_cost()
 
   def change_instance_type(self, *args, **kwargs):
+    _unused(args)
+    _unused(kwargs)
     self.update_est_cost()
 
   def change_renderer(self, renderer):
@@ -1466,7 +1480,7 @@ class SubmitWindow(object):
     Args:
       checked: bool, whether the checkbox is checked
     """
-    current_renderer = eval_ui('renderer', type='optionMenu', v=True).lower()
+    current_renderer = eval_ui('renderer', ui_type='optionMenu', v=True).lower()
     # if using arnold standalone, disable chunk size. arnold stores info
     # one-frame-per-file so chunk size is not applicable.
     if current_renderer == 'arnold' and checked:
@@ -1537,7 +1551,7 @@ class SubmitWindow(object):
 
     params['renderer'] = self.get_renderer()
 
-    params['job_subtype'] = eval_ui('job_type', type='optionMenu', v=True).lower()
+    params['job_subtype'] = eval_ui('job_type', ui_type='optionMenu', v=True).lower()
 
     params['priority'] = int(eval_ui('priority', text=True))
     params['num_instances'] = int(eval_ui('num_instances', text=True))
@@ -1639,7 +1653,7 @@ class SubmitWindow(object):
       cmds.radioButton('existing_project', e=True, en=True)
 
   def init_instance_type(self):
-    current_selected = eval_ui('instance_type', type='optionMenu', v=True)
+    current_selected = eval_ui('instance_type', ui_type='optionMenu', v=True)
     if current_selected == None:
       current_machine_type = None
     else:
@@ -1648,7 +1662,7 @@ class SubmitWindow(object):
     if old_types != None:
       cmds.deleteUI(old_types)
     current_renderer = None
-    menu_option = eval_ui('renderer', type='optionMenu', v=True)
+    menu_option = eval_ui('renderer', ui_type='optionMenu', v=True)
     current_renderer = self.get_renderer()
     sorted_types = [t for t in self.zync_conn.INSTANCE_TYPES]
     sorted_types.sort(self.zync_conn.compare_instance_types)
@@ -1733,10 +1747,10 @@ class SubmitWindow(object):
     cmds.textField('output_dir', e=True, tx=default_output_dir)
 
   def update_est_cost(self):
-    machine_type = eval_ui('instance_type', type='optionMenu', v=True)
+    machine_type = eval_ui('instance_type', ui_type='optionMenu', v=True)
     if machine_type != None:
       machine_type = machine_type.split(' (')[0]
-      renderer_label = eval_ui('renderer', type='optionMenu', v=True)
+      renderer_label = eval_ui('renderer', ui_type='optionMenu', v=True)
       renderer = self.get_renderer()
       if renderer != None:
         num_machines = int(eval_ui('num_instances', text=True))
@@ -1765,7 +1779,7 @@ class SubmitWindow(object):
       str, the currently selected renderer, or None if we weren't
       able to identify the one selected.
     """
-    selected_renderer_label = eval_ui('renderer', type='optionMenu', v=True)
+    selected_renderer_label = eval_ui('renderer', ui_type='optionMenu', v=True)
     for renderer, renderer_label in self.zync_conn.MAYA_RENDERERS.iteritems():
       if renderer_label == selected_renderer_label:
         return renderer
@@ -1834,7 +1848,7 @@ class SubmitWindow(object):
     try:
       params['scene_info'] = get_scene_info(params['renderer'],
                                             params['layers'].split(','),
-                                            (eval_ui('job_type', type='optionMenu', v=True).lower() == 'bake'))
+                                            (eval_ui('job_type', ui_type='optionMenu', v=True).lower() == 'bake'))
     except ZyncAbortedByUser:
       # If the job is aborted just finish the submit function
       return
