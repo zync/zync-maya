@@ -1847,7 +1847,7 @@ class SubmitWindow(object):
     print 'Collecting scene info...'
     try:
       params['scene_info'] = get_scene_info(params['renderer'],
-                                            params['layers'].split(','),
+                                            (params['layers'].split(',') if params['layers'] else None),
                                             (eval_ui('job_type', ui_type='optionMenu', v=True).lower() == 'bake'))
     except ZyncAbortedByUser:
       # If the job is aborted just finish the submit function
