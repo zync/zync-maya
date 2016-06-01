@@ -133,6 +133,18 @@ class TestMayaScene(unittest.TestCase):
     scene_info_from_scene['files'].sort()
     scene_info_master['files'].sort()
 
+    # be a bit less specific when checking renderer version
+
+    if 'arnold_version' in scene_info_from_scene:
+      scene_info_from_scene['arnold_version'] = '.'.join(scene_info_from_scene['arnold_version'].split('.')[:2])
+    if 'arnold_version' in scene_info_master:
+      scene_info_master['arnold_version'] = '.'.join(scene_info_master['arnold_version'].split('.')[:2])
+
+    if 'renderman_version' in scene_info_from_scene:
+      scene_info_from_scene['renderman_version'] = scene_info_from_scene['renderman_version'].split('.')[0]
+    if 'renderman_version' in scene_info_master:
+      scene_info_master['renderman_version'] = scene_info_master['renderman_version'].split('.')[0]
+
     self.assertEqual(scene_info_from_scene, scene_info_master)
 
 
