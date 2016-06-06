@@ -1063,8 +1063,9 @@ def get_scene_info(renderer, layers_to_render, is_bake):
     try:
       scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
     except Exception as e:
-      print str(e)
-      raise MayaZyncException('Could not detect Vray version. This is required to render Vray jobs. Do you have the Vray plugin loaded?')
+      raise MayaZyncException('Could not detect Vray version. This is required '
+                              'to render Vray jobs. Do you have the Vray '
+                              'plugin loaded?')
 
   scene_info['arnold_version'] = ''
   if renderer == 'arnold':
@@ -1072,8 +1073,9 @@ def get_scene_info(renderer, layers_to_render, is_bake):
     try:
       scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True))
     except Exception as e:
-      print str(e)
-      raise MayaZyncException('Could not detect Arnold version. This is required to render Arnold jobs. Do you have the Arnold plugin loaded?')
+      raise MayaZyncException('Could not detect Arnold version. This is '
+                              'required to render Arnold jobs. Do you have the '
+                              'Arnold plugin loaded?')
 
   if renderer == 'renderman':
     print '--> renderman version'
@@ -1082,8 +1084,9 @@ def get_scene_info(renderer, layers_to_render, is_bake):
       # these were not synchronized. prman version comes back like "prman 20.7 @1571626"
       scene_info['renderman_version'] = str(maya.mel.eval('rman getversion prman').split()[1])
     except Exception as e:
-      print str(e)
-      raise MayaZyncException('Could not detect Renderman version. This is required to render Renderman jobs. Do you have the Renderman plugin loaded?')
+      raise MayaZyncException('Could not detect Renderman version. This is '
+                              'required to render Renderman jobs. Do you have '
+                              'the Renderman plugin loaded?')
 
   # If this is an Arnold job and AOVs are on, include a list of AOV
   # names in scene_info. If "Merge AOVs" is on, i.e. multichannel EXRs,
@@ -1182,7 +1185,12 @@ class MayaZyncException(Exception):
   This exception issues a Maya warning.
   """
   def __init__(self, msg, *args, **kwargs):
+    # log message to the console
     cmds.warning(msg)
+    # open a dialog showing error to user. in batch mode this does nothing
+    cmds.confirmDialog(title='Error',
+      message=msg,
+      button='OK', defaultButton='OK', icon='critical')
     super(MayaZyncException, self).__init__(msg, *args, **kwargs)
 
 
@@ -1206,11 +1214,7 @@ class SubmitWindow(object):
 
     scene_name = cmds.file(q=True, loc=True)
     if scene_name == 'unknown':
-      err_msg = 'Please save your script before launching a job.'
-      cmds.confirmDialog(title='Unsaved script',
-        message=err_msg,
-        button='OK', defaultButton='OK', icon='critical')
-      cmds.error(err_msg)
+      raise MayaZyncException('Please save your script before launching a job.')
 
     # this will perform the Google OAuth flow so future API requests
     # will be authenticated
@@ -1532,11 +1536,8 @@ class SubmitWindow(object):
     if cmds.radioButton('existing_project', q=True, sl=True) == True:
       proj_name = eval_ui('existing_project_name', 'optionMenu', v=True)
       if proj_name == None or proj_name.strip() == '':
-        err_msg = 'Your project name cannot be blank. Please select New Project and enter a name.'
-        cmds.confirmDialog(title='No project',
-          message=err_msg,
-          button='OK', defaultButton='OK', icon='critical')
-        cmds.error(err_msg)
+        raise MayaZyncException('Your project name cannot be blank. Please '
+                                'select New Project and enter a name.')
     else:
       proj_name = eval_ui('new_project_name', text=True)
     params['proj_name'] = proj_name
@@ -1583,12 +1584,9 @@ class SubmitWindow(object):
 
     params['camera'] = eval_ui('camera', 'optionMenu', v=True)
     if not params['camera']:
-      err_msg = ('Please select a render camera. If the list is empty, try '
-                 'adding a renderable camera in your scene render settings.')
-      cmds.confirmDialog(title='Select a Camera',
-        message=err_msg,
-        button='OK', defaultButton='OK', icon='critical')
-      raise MayaZyncException(err_msg)
+      raise MayaZyncException('Please select a render camera. If the list is '
+                              'empty, try adding a renderable camera in your '
+                              'scene render settings.')
 
     if params['upload_only'] == 0 and params['renderer'] == 'vray':
       params['vray_nightly'] = int(eval_ui('vray_nightly', 'checkBox', v=True))
@@ -1613,16 +1611,14 @@ class SubmitWindow(object):
     elif params['job_subtype'] == 'bake':
       bake_sets = eval_ui('layers', 'textScrollList', ai=True, si=True)
       if not bake_sets:
-        msg = 'Please select bake set(s).'
-        raise MayaZyncException(msg)
+        raise MayaZyncException('Please select bake set(s).')
       bake_sets = ','.join(bake_sets)
       params['bake_sets'] = bake_sets
       params['layers'] = None
     else:
       layers = eval_ui('layers', 'textScrollList', ai=True, si=True)
       if not layers:
-        msg = 'Please select layer(s) to render.'
-        raise MayaZyncException(msg)
+        raise MayaZyncException('Please select layer(s) to render.')
       layers = ','.join(layers)
       params['layers'] = layers
       params['bake_sets'] = None
@@ -1847,10 +1843,7 @@ class SubmitWindow(object):
       window: The Zync Maya UI window
     """
     if not window.zync_conn.has_user_login():
-      cmds.confirmDialog(title='Not Logged In',
-        message='You must login before submitting a new job.',
-        button='OK', defaultButton='OK', icon='critical')
-      return
+      raise MayaZyncException('You must login before submitting a new job.')
 
     print 'Collecting render parameters...'
     scene_path = cmds.file(q=True, loc=True)
@@ -1941,14 +1934,11 @@ class SubmitWindow(object):
         if (cmds.objExists('vraySettings') and
             cmds.attributeQuery('vrscene_on', node='vraySettings', exists=True) and
             cmds.getAttr('vraySettings.vrscene_on')):
-          err_msg = ('You have "Export to a .vrscene file" turned on. This will '
-                     'cause Vray to attempt a scene export rather than a '
-                     'render. Please disable this option before submitting '
-                     'this scene to Zync for rendering.')
-          cmds.confirmDialog(title='Scene Set to Export',
-            message=err_msg,
-            button='OK', defaultButton='OK', icon='critical')
-          raise MayaZyncException(err_msg)
+          raise MayaZyncException('You have "Export to a .vrscene file" turned '
+                                  'on. This will cause Vray to attempt a scene '
+                                  'export rather than a render. Please disable '
+                                  'this option before submitting this scene to '
+                                  'Zync for rendering.')
 
         if not window.verify_eula_acceptance(window.zync_conn):
           cmds.error('Job submission canceled.')
