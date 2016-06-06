@@ -532,6 +532,13 @@ def _aiVolume_handler(node):
   yield cmds.getAttr('%s.filename' % node)
 
 
+def _mash_handler(node):
+  archive_paths = cmds.getAttr('%s.ribArchives' % node)
+  if archive_paths:
+    for archive_path in archive_paths.split(','):
+      yield archive_path
+
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {
@@ -566,6 +573,7 @@ def get_scene_files():
     'RMSEnvLight': _rmsEnvLight_handler,
     'OpenVDBRead': _openVDBRead_handler,
     'aiVolume': _aiVolume_handler,
+    'MASH_Waiter': _mash_handler,
   }
 
   for file_type in file_types:
@@ -841,12 +849,16 @@ def get_layer_override(layer, renderer, field):
 
 def get_maya_version():
   """Returns the current major Maya version in use."""
-  #
-  # "about -api" returns a value containing both major and minor
+  # `about -api` returns a value containing both major and minor
   # maya versions in one integer, e.g. 201515. Divide by 100 to
   # find the major version.
-  #
-  return str(int(float(maya.mel.eval('about -api')) / 100))
+  version_full = maya.mel.eval('about -api') / 100.0
+  # round down to the nearest .5
+  version_rounded = math.floor(version_full * 2) / 2
+  # if it's a whole number e.g. 2016.0, drop the decimal
+  if version_rounded.is_integer():
+    version_rounded = int(version_rounded)
+  return str(version_rounded)
 
 
 def _rman_translate_format_to_extension(image_format):
@@ -1250,7 +1262,7 @@ class SubmitWindow(object):
     Loads the UI and does post-load commands.
     """
     # Maya 2016 and up will use Maya IO by default.
-    self.is_maya_io = (int(get_maya_version()) >= 2016)
+    self.is_maya_io = (float(get_maya_version()) >= 2016)
     # Create some new functions. These functions are called by UI elements in
     # resources/submit_dialog.ui. Each UI element in that file uses these
     # functions to query this window Object for its initial value.

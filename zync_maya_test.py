@@ -32,16 +32,16 @@ class MayaFailedException(Exception):
   pass
 
 
-def _get_maya_bin():
+def _get_maya_bin(maya_version):
   """Gets Maya install location."""
   # mac
   if platform.system() == 'Darwin':
-    return '/Applications/Autodesk/maya2016/Maya.app/Contents/bin/maya'
+    return '/Applications/Autodesk/maya%s/Maya.app/Contents/bin/maya' % maya_version
   # linux. testing on windows not currently supported.
   else:
-    if os.path.isdir('/usr/autodesk/mayaIO2016'):
-      return '/usr/autodesk/mayaIO2016/bin/maya'
-    return '/usr/autodesk/maya2016/bin/maya'
+    if os.path.isdir('/usr/autodesk/mayaIO%s' % maya_version):
+      return '/usr/autodesk/mayaIO%s/bin/maya' % maya_version
+    return '/usr/autodesk/maya%s/bin/maya' % maya_version
 
 
 def _unicode_to_str(input_obj):
@@ -66,12 +66,67 @@ def _unicode_to_str(input_obj):
     return input_obj
 
 
+def run_maya_and_get_scene_info(scene, renderer, layers, maya_version):
+  # Write out a temporary MEL script which wraps the call to zync-maya.
+  # We could use mayapy instead but mayapy has proven unreliable in initializing
+  # its environment in the same way as standard maya.
+  with tempfile.NamedTemporaryFile() as mel_script:
+    # Maya produces a lot of output on startup that we don't have control over.
+    # This output goes to both stdout & stderr and can differ based on what
+    # plugins are installed and various other factors. In order to reliably
+    # capture only the scene_info, we write it out to another temp file.
+    scene_info_fd, scene_info_file = tempfile.mkstemp()
+    script_text = 'python("import zync_maya"); '
+    script_text += 'string $scene_info = python("zync_maya.get_scene_info('
+    # renderer
+    script_text += '\'%s\', ' % renderer
+    # list of layers being rendered. this comes in a comma-separated string
+    # already so no need to join
+    script_text += '[\'%s\'], ' % layers
+    # is_bake
+    script_text += 'False)"); '
+    script_text += 'string $output_file = "%s"; ' % scene_info_file
+    script_text += '$fp = `fopen $output_file "w"`; '
+    script_text += 'fprint $fp $scene_info; '
+    script_text += 'fclose $fp; '
+    mel_script.write(script_text)
+    mel_script.flush()
+
+    # Run Maya. This launches Maya, loads the scene file, runs our MEL wrapper
+    # script, and exits.
+    cmd = '%s -batch -script %s -file "%s"' % (_get_maya_bin(maya_version),
+                                               mel_script.name,
+                                               scene)
+    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                         shell=True)
+    out, err = p.communicate()
+    if p.returncode:
+      raise MayaFailedException(('maya failed to run. rc: %d, stdout: %s, '
+                                 'stderr: %s') % (p.returncode, out, err))
+
+    # Read in the scene info from file and clean up.
+    with os.fdopen(scene_info_fd) as fp:
+      scene_info_raw = fp.read()
+    os.remove(scene_info_file)
+
+  try:
+    scene_info_from_scene = _unicode_to_str(ast.literal_eval(scene_info_raw))
+  except SyntaxError:
+    print 'SyntaxError parsing scene_info.'
+    print 'maya stdout: %s' % out
+    print 'maya stderr: %s' % err
+    raise
+
+  return scene_info_from_scene
+
+
 class TestMayaScene(unittest.TestCase):
 
-  def __init__(self, testname, scene_file, info_file):
+  def __init__(self, testname, scene_file, info_file, maya_version):
     super(TestMayaScene, self).__init__(testname)
     self.scene_file = scene_file
     self.info_file = info_file
+    self.maya_version = maya_version
     # test_scene_info compares dicts, setting maxDiff to None tells it
     # to show the entire diff in case of a mismatch.
     self.maxDiff = None
@@ -81,52 +136,8 @@ class TestMayaScene(unittest.TestCase):
       params = json.loads(fp.read())['params']
     scene_info_master = _unicode_to_str(params['scene_info'])
 
-    # Write out a temporary MEL script which wraps the call to zync-maya.
-    # We could use mayapy instead but mayapy has proven unreliable in initializing
-    # its environment in the same way as standard maya.
-    with tempfile.NamedTemporaryFile() as mel_script:
-      # Maya produces a lot of output on startup that we don't have control over.
-      # This output goes to both stdout & stderr and can differ based on what plugins are
-      # installed and various other factors. In order to reliably capture only the
-      # scene_info, we write it out to another temp file.
-      scene_info_fd, scene_info_file = tempfile.mkstemp()
-      script_text = 'python("import zync_maya"); '
-      script_text += 'string $scene_info = python("zync_maya.get_scene_info('
-      # renderer
-      script_text += '\'%s\', ' % params['renderer']
-      # list of layers being rendered. this comes in a comma-separated string already
-      # so no need to join
-      script_text += '[\'%s\'], ' % params['layers']
-      # is_bake
-      script_text += 'False)"); '
-      script_text += 'string $output_file = "%s"; ' % scene_info_file
-      script_text += '$fp = `fopen $output_file "w"`; '
-      script_text += 'fprint $fp $scene_info; '
-      script_text += 'fclose $fp; '
-      mel_script.write(script_text)
-      mel_script.flush()
-
-      # Run Maya. This launches Maya, loads the scene file, runs our MEL wrapper
-      # script, and exits.
-      cmd = '%s -batch -script %s -file "%s"' % (_get_maya_bin(), mel_script.name, self.scene_file)
-      p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
-      out, err = p.communicate()
-      if p.returncode:
-        raise MayaFailedException(('maya failed to run. rc: %d, stdout: %s, '
-                                   'stderr: %s') % (p.returncode, out, err))
-
-      # Read in the scene info from file and clean up.
-      with os.fdopen(scene_info_fd) as fp:
-        scene_info_raw = fp.read()
-      os.remove(scene_info_file)
-
-    try:
-      scene_info_from_scene = _unicode_to_str(ast.literal_eval(scene_info_raw))
-    except SyntaxError:
-      print 'SyntaxError parsing scene_info.'
-      print 'maya stdout: %s' % out
-      print 'maya stderr: %s' % err
-      raise
+    scene_info_from_scene = run_maya_and_get_scene_info(self.scene_file,
+        params['renderer'], params['layers'], self.maya_version)
 
     # sort the file list from each set of scene info so we don't raise errors
     # caused only by file lists being in different orders
@@ -158,10 +169,11 @@ def main():
   parser.add_argument('--scene', required=True, help='Path to the Maya scene to test.')
   parser.add_argument('--info-file', required=True, help=('Path to JSON file containing '
                                                           'expected scene information.'))
+  parser.add_argument('--maya-version', required=True, help='Maya version number to test.')
   args = parser.parse_args()
 
   suite = unittest.TestSuite()
-  suite.addTest(TestMayaScene('test_scene_info', args.scene, args.info_file))
+  suite.addTest(TestMayaScene('test_scene_info', args.scene, args.info_file, args.maya_version))
   test_result = unittest.TextTestRunner().run(suite)
 
   # since we're not using unittest.main, we need to manually provide an
