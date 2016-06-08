@@ -146,6 +146,8 @@ def seq_to_glob(in_path):
     return re.sub('#+', '*', in_path, flags=re.IGNORECASE)
   if 'u<u>_v<v>' in in_path.lower():
     return re.sub('<u>|<v>', '*', in_path, flags=re.IGNORECASE)
+  if '<frame0' in in_path.lower():
+    return re.sub(r'<frame0\d+>', '*', in_path, flags=re.IGNORECASE)
   head = os.path.dirname(in_path)
   base = os.path.basename(in_path)
   matches = list(re.finditer(r'\d+', base))
@@ -187,7 +189,8 @@ def node_uses_image_sequence(node):
   # a <UDIM> token implies a sequence
   node_path = get_file_node_path(node).lower()
   return (cmds.getAttr('%s.useFrameExtension' % node) == True or
-          '<udim>' in node_path or '<tile>' in node_path or 'u<u>_v<v>' in node_path)
+          '<udim>' in node_path or '<tile>' in node_path or
+          'u<u>_v<v>' in node_path or '<frame0' in node_path)
 
 
 def _get_layer_overrides(attr):
