@@ -1891,6 +1891,22 @@ class SubmitWindow(object):
     scene_path = cmds.file(q=True, loc=True)
     params = window.get_render_params()
 
+    if '(ALPHA)' in params.get('instance_type', ''):
+      confirm_mesage = 'Yes, submit job.'
+      cancel_message = 'No, cancel job submission.'
+      alpha_warning_result = cmds.confirmDialog(
+          title='ALPHA instance type selected',
+          message=('You\'ve selected an instance type for your job which is '
+                  'still in alpha, and could be unstable for some workloads. '
+                  'Are you sure you want to submit the job using this '
+                  'instance type?'),
+          button=(confirm_mesage, cancel_message),
+          defaultButton=confirm_mesage,
+          cancelButton=cancel_message,
+          icon='warning')
+      if alpha_warning_result != confirm_mesage:
+        raise ZyncAbortedByUser('Aborted by user')
+
     print 'Collecting scene info...'
     try:
       params['scene_info'] = get_scene_info(params['renderer'],
