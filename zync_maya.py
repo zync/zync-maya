@@ -170,7 +170,7 @@ def get_file_node_path(node):
   # this preserves the <> tag
   if cmds.attributeQuery('computedFileTextureNamePattern', node=node, exists=True):
     textureNamePattern = cmds.getAttr('%s.computedFileTextureNamePattern' % node)
-    if ('<udim>' in textureNamePattern.lower() or '<tile>' in textureNamePattern.lower() 
+    if ('<udim>' in textureNamePattern.lower() or '<tile>' in textureNamePattern.lower()
         or 'u<u>_v<v>' in textureNamePattern or 'u<U>_v<V>' in textureNamePattern):
       return cmds.getAttr('%s.computedFileTextureNamePattern' % node)
   # otherwise use fileTextureName
@@ -232,7 +232,7 @@ def _file_handler(node):
   # or token. this will match what's provided via the file list
   # in the job's scene_info, so we can properly path swap
   if node_uses_image_sequence(node):
-    texture_path = seq_to_glob(texture_path) 
+    texture_path = seq_to_glob(texture_path)
   yield texture_path
   # if the Arnold "Use .tx" flag is on, look for a .tx version
   # of the texture as well
@@ -270,7 +270,7 @@ def _diskCache_handler(node):
     node: str, name of diskCache node
 
   Yields:
-    tuple of str, paths referenced 
+    tuple of str, paths referenced
   """
   cache_name = cmds.getAttr('%s.cacheName' % node)
   # if its an absolute path we're done, otherwise we need to resolve it
@@ -542,6 +542,10 @@ def _mash_handler(node):
       yield archive_path
 
 
+def _pxrPtexture_handler(node):
+  yield cmds.getAttr('%s.filename' % node)
+
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {
@@ -577,6 +581,7 @@ def get_scene_files():
     'OpenVDBRead': _openVDBRead_handler,
     'aiVolume': _aiVolume_handler,
     'MASH_Waiter': _mash_handler,
+    'PxrPtexture': _pxrPtexture_handler,
   }
 
   for file_type in file_types:
