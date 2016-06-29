@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.1.9'
+__version__ = '1.1.10'
 
 import copy
 import hashlib
@@ -28,7 +28,9 @@ import sys
 import time
 import traceback
 import webbrowser
+
 from functools import partial
+from maya import OpenMayaUI
 
 if os.environ.get('ZYNC_API_DIR'):
   API_DIR = os.environ.get('ZYNC_API_DIR')
@@ -1308,6 +1310,7 @@ class SubmitWindow(object):
     name = cmds.loadUI(f=ui_file)
 
     cmds.window(name, e=True, title=self.title)
+    OpenMayaUI.MUiMessage.addUiDeletedCallback(name, partial(self.on_close, self))
 
     #
     #  Callbacks - set up functions to be called as UI elements are modified.
@@ -1845,6 +1848,9 @@ class SubmitWindow(object):
 
   def clear_user_label(self):
     cmds.text('google_login_status', e=True, label='')
+
+  def on_close(self, *args):
+    self.zync_conn.cancel_token_refresh()
 
   @staticmethod
   def get_initial_value(window, name):
