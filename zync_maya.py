@@ -14,22 +14,20 @@ Usage:
 
 """
 
-__version__ = '1.1.10'
+__version__ = '1.2.1'
 
 import copy
-import hashlib
+import file_select_dialog
 import math
 import md5
 import os
-import platform
 import re
 import string
 import sys
-import time
 import traceback
 import webbrowser
 
-from functools import partial
+# pylint: disable=import-error
 from maya import OpenMayaUI
 
 if os.environ.get('ZYNC_API_DIR'):
@@ -38,6 +36,7 @@ else:
   config_path = '%s/config_maya.py' % (os.path.dirname(__file__),)
   if not os.path.exists(config_path):
     raise Exception('Could not locate config_maya.py, please create.')
+  # pylint: disable=import-error
   from config_maya import *
 
 required_config = ['API_DIR']
@@ -895,7 +894,7 @@ def _rman_translate_format_to_extension(image_format):
   return formats_list[format_index+1]
 
 
-def get_scene_info(renderer, layers_to_render, is_bake):
+def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
   """Returns scene info for the current scene."""
 
   print '--> initializing'
@@ -1029,6 +1028,11 @@ def get_scene_info(renderer, layers_to_render, is_bake):
 
   print '--> files'
   scene_info['files'] = list(set(get_scene_files()))
+  for full_name in extra_assets:
+    if os.path.isdir(full_name):
+      scene_info['files'].append(os.path.join(full_name, '*'))
+    else:
+      scene_info['files'].append(full_name)
   # Xgen files are already included in the main files list, but we also
   # include them separately so Zync can perform Xgen-related tasks on
   # the much smaller subset
@@ -1230,6 +1234,9 @@ class SubmitWindow(object):
     # will be authenticated
     self.zync_conn = zync.Zync(application='maya')
 
+    # TODO(maciek): cleanup after the experiment is done (b/28901835)
+    self.experiment_swapless = self.zync_conn.is_experiment_enabled('EXPERIMENT_SWAPLESS')
+
     self.new_project_name = self.zync_conn.get_project_name(scene_name)
 
     self.num_instances = 1
@@ -1267,6 +1274,8 @@ class SubmitWindow(object):
     self.init_layers()
     self.init_bake()
 
+    self.extra_assets = set()
+
     self.name = self.loadUI(UI_FILE)
 
     self.check_references()
@@ -1292,10 +1301,11 @@ class SubmitWindow(object):
     # The UI doesn't have a reference to this window Object, but it does have
     # access to the Maya API. So we monkey patch these new functions into the
     # API so the UI can in effect call class functions.
-    cmds.submit_callb = partial(self.get_initial_value, self)
-    cmds.do_submit_callb = partial(self.submit, self)
-    cmds.login_with_google_callb = partial(self.login_with_google, self)
-    cmds.logout_callb = partial(self.logout, self)
+    cmds.submit_callb = self.get_initial_value
+    cmds.do_submit_callb = self.submit
+    cmds.select_files_callb = self.select_files
+    cmds.login_with_google_callb = self.login_with_google
+    cmds.logout_callb = self.logout
 
     #
     #  Delete the "SubmitDialog" window if it exists.
@@ -1310,7 +1320,7 @@ class SubmitWindow(object):
     name = cmds.loadUI(f=ui_file)
 
     cmds.window(name, e=True, title=self.title)
-    OpenMayaUI.MUiMessage.addUiDeletedCallback(name, partial(self.on_close, self))
+    OpenMayaUI.MUiMessage.addUiDeletedCallback(name, self.on_close)
 
     #
     #  Callbacks - set up functions to be called as UI elements are modified.
@@ -1323,11 +1333,16 @@ class SubmitWindow(object):
     cmds.optionMenu('renderer', e=True, changeCommand=self.change_renderer)
     cmds.optionMenu('job_type', e=True, changeCommand=self.change_job_type)
     cmds.checkBox('distributed', e=True, changeCommand=self.distributed_toggle)
+    cmds.checkBox('sync_extra_assets', e=True, changeCommand=self.sync_extra_assets_toggle)
+    cmds.button('select_files', e=True, enable=False)
     cmds.textScrollList('layers', e=True, selectCommand=self.change_layers)
     # No point in even showing the standalone option to users of old Maya, where
     # we force standalone use.
     cmds.checkBox('use_standalone', e=True, changeCommand=self.change_standalone,
                   vis=self.is_maya_io)
+    if not self.experiment_swapless:
+      cmds.control('extra_assets_frame', e=True, visible=False)
+
     #
     #  Call a few of those callbacks now to set initial UI state.
     #
@@ -1387,6 +1402,14 @@ class SubmitWindow(object):
     """
     # if DR is on use of standalone is required
     cmds.checkBox('use_standalone', e=True, en=not checked, value=checked)
+
+  def sync_extra_assets_toggle(self, checked):
+    """Event triggered when the Sync Extra Assets control is toggled.
+
+    Args:
+      checked: bool, whether the checkbox is checked
+    """
+    cmds.button('select_files', e=True, enable=checked)
 
   def change_num_instances(self, *args, **kwargs):
     _unused(args)
@@ -1561,6 +1584,7 @@ class SubmitWindow(object):
     params['skip_check'] = int(eval_ui('skip_check', 'checkBox', v=True))
     params['notify_complete'] = self.notify_complete
     params['project'] = eval_ui('project', text=True)
+    params['sync_extra_assets'] = int(eval_ui('sync_extra_assets', 'checkBox', v=True))
 
     #
     # Get the output path. If it is a relative path, convert it to an
@@ -1850,14 +1874,13 @@ class SubmitWindow(object):
     cmds.text('google_login_status', e=True, label='')
 
   def on_close(self, *args):
+    _unused(args)
     self.zync_conn.cancel_token_refresh()
 
-  @staticmethod
-  def get_initial_value(window, name):
+  def get_initial_value(self, name):
     """Returns the initial value for a given attribute.
 
     Args:
-      window: The Zync Maya UI window
       name: str the attribute name
 
     Returns:
@@ -1865,42 +1888,39 @@ class SubmitWindow(object):
         not found
     """
     init_name = '_'.join(('init', name))
-    if hasattr(window, init_name):
-      return getattr(window, init_name)()
-    elif hasattr(window, name):
-      return getattr(window, name)
+    if hasattr(self, init_name):
+      return getattr(self, init_name)()
+    elif hasattr(self, name):
+      return getattr(self, name)
     else:
       return 'Undefined'
 
-  @staticmethod
-  def login_with_google(window):
-    """Perform the Google OAuth flow.
+  def login_with_google(self):
+    """Perform the Google OAuth flow."""
+    self.login_type = 'google'
+    self.zync_conn.login_with_google()
+    self.set_user_label(self.zync_conn.email)
 
-    Args:
-      window: The Zync Maya UI window
-    """
-    window.login_type = 'google'
-    window.zync_conn.login_with_google()
-    window.set_user_label(window.zync_conn.email)
+  def logout(self):
+    self.zync_conn.logout()
+    self.clear_user_label()
 
-  @staticmethod
-  def logout(window):
-    window.zync_conn.logout()
-    window.clear_user_label()
+  def select_files(self):
+    self.file_select_dialog = file_select_dialog.FileSelectDialog(self.extra_assets)
+    self.file_select_dialog.show()
 
-  @staticmethod
-  def submit(window):
-    """Submit a job to Zync.
-
-    Args:
-      window: The Zync Maya UI window
-    """
-    if not window.zync_conn.has_user_login():
+  def submit(self):
+    """Submit a job to Zync."""
+    if not self.zync_conn.has_user_login():
       raise MayaZyncException('You must login before submitting a new job.')
 
     print 'Collecting render parameters...'
     scene_path = cmds.file(q=True, loc=True)
-    params = window.get_render_params()
+    params = self.get_render_params()
+
+    if params['sync_extra_assets']:
+      if not self.extra_assets:
+        raise MayaZyncException('No extra assets selected')
 
     if '(ALPHA)' in params.get('instance_type', ''):
       confirm_mesage = 'Yes, submit job.'
@@ -1921,8 +1941,9 @@ class SubmitWindow(object):
     print 'Collecting scene info...'
     try:
       params['scene_info'] = get_scene_info(params['renderer'],
-                                            (params['layers'].split(',') if params['layers'] else None),
-                                            (eval_ui('job_type', ui_type='optionMenu', v=True).lower() == 'bake'))
+          (params['layers'].split(',') if params['layers'] else None),
+          (eval_ui('job_type', ui_type='optionMenu', v=True).lower() == 'bake'),
+          self.extra_assets if params['sync_extra_assets'] else set())
     except ZyncAbortedByUser:
       # If the job is aborted just finish the submit function
       return
@@ -1930,7 +1951,7 @@ class SubmitWindow(object):
     params['plugin_version'] = __version__
 
     try:
-      if (not window.is_maya_io or
+      if (not self.is_maya_io or
           eval_ui('use_standalone', 'checkBox', v=True)):
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
@@ -1945,12 +1966,12 @@ class SubmitWindow(object):
         if params['renderer'] == 'vray':
           print 'Vray job, collecting additional info...'
 
-          vrscene_path = window.get_standalone_scene_path('vrscene', window)
+          vrscene_path = self.get_standalone_scene_path('vrscene')
 
           print 'Exporting .vrscene files...'
           for layer in layer_list:
-            print 'Exporting layer %s...' % (layer,)
-            possible_scene_names, layer_params = window.export_vrscene(
+            print 'Exporting layer %s...' % layer
+            possible_scene_names, render_params = self.export_vrscene(
                 vrscene_path, layer, params, sf, ef)
 
             layer_file = None
@@ -1962,22 +1983,25 @@ class SubmitWindow(object):
               raise zync.ZyncError('the .vrscene file generated by the Zync Maya plugin '
                                    'was not found. Unable to submit job.')
 
-            print 'Submitting job for layer %s...' % (layer,)
-            window.zync_conn.submit_job('vray', layer_file, params=layer_params)
+            print 'Submitting job for layer %s...' % layer
+
+            renderer = 'vray'
+            scene_file = layer_file
 
         elif params['renderer'] == 'arnold':
           print 'Arnold job, collecting additional info...'
 
-          ass_path = window.get_standalone_scene_path('ass', window)
+          ass_path = self.get_standalone_scene_path('ass')
 
           print 'Exporting .ass files...'
           for layer in layer_list:
-            print 'Exporting layer %s...' % (layer,)
-            layer_file_wildcard, layer_params = window.export_ass(ass_path,
+            print 'Exporting layer %s...' % layer
+            layer_file_wildcard, render_params = self.export_ass(ass_path,
                 layer, params, sf, ef)
-            print 'Submitting job for layer %s...' % (layer,)
-            window.zync_conn.submit_job('arnold', layer_file_wildcard, params=layer_params)
+            print 'Submitting job for layer %s...' % layer
 
+            renderer = 'arnold'
+            scene_file = layer_file_wildcard
         else:
           raise MayaZyncException('Renderer %s unsupported for standalone rendering.' % params['renderer'])
 
@@ -2009,12 +2033,16 @@ class SubmitWindow(object):
                                   'this option before submitting this scene to '
                                   'Zync for rendering.')
 
-        if not window.verify_eula_acceptance(window.zync_conn):
+        if not self.verify_eula_acceptance():
           cmds.error('Job submission canceled.')
 
-        window.zync_conn.submit_job('maya', scene_path, params=params)
-        cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
-          button='OK', defaultButton='OK')
+        renderer = 'maya'
+        scene_file = scene_path
+        render_params = params
+
+      self.zync_conn.submit_job(renderer, scene_file, params=render_params)
+      cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
+        button='OK', defaultButton='OK')
 
     except zync.ZyncPreflightError as e:
       cmds.confirmDialog(title='Preflight Check Failed', message=str(e),
@@ -2029,14 +2057,14 @@ class SubmitWindow(object):
       print 'Done.'
 
   @staticmethod
-  def export_vrscene(vrscene_path, layer, render_params, start_frame, end_frame):
+  def export_vrscene(vrscene_path, layer, params, start_frame, end_frame):
     """Export a .vrscene of the current scene.
 
     Args:
       vrscene_path: str, path to which to export the .vrscene. A layer name will
                     be inserted into the filename.
       layer: str, the name of the render layer to export
-      render_params: dict, render job parameters
+      params: dict, render job parameters
       start_frame: int, the first frame to export
       end_frame: int, the last frame to export
 
@@ -2055,15 +2083,15 @@ class SubmitWindow(object):
     scene_head, extension = os.path.splitext(scene_path)
     scene_name = os.path.basename(scene_head)
 
-    layer_params = copy.deepcopy(render_params)
+    render_params = copy.deepcopy(params)
 
-    layer_params['project_dir'] = render_params['project']
-    layer_params['output_dir'] = render_params['out_path']
-    layer_params['use_nightly'] = render_params['vray_nightly']
-    if ('extension' not in render_params['scene_info'] or
-      render_params['scene_info']['extension'] == None or
-      render_params['scene_info']['extension'].strip() == ''):
-      layer_params['scene_info']['extension'] = 'png'
+    render_params['project_dir'] = params['project']
+    render_params['output_dir'] = params['out_path']
+    render_params['use_nightly'] = params['vray_nightly']
+    if ('extension' not in params['scene_info'] or
+        params['scene_info']['extension'] == None or
+        params['scene_info']['extension'].strip() == ''):
+      render_params['scene_info']['extension'] = 'png'
 
     tail = cmds.getAttr('vraySettings.fileNamePrefix')
     if not tail:
@@ -2071,16 +2099,15 @@ class SubmitWindow(object):
     else:
       tail = tail.replace('%s', scene_name)
       tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
-      clean_camera = layer_params['camera'].replace(':', '_')
+      clean_camera = render_params['camera'].replace(':', '_')
       tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
         flags=re.IGNORECASE)
       tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
     if tail[-1] != '.':
       tail += '.'
 
-    layer_params['output_filename'] = '%s.%s' % (
-      tail, layer_params['scene_info']['extension'])
-    layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
+    render_params['output_filename'] = '%s.%s' % (tail, render_params['scene_info']['extension'])
+    render_params['output_filename'] = render_params['output_filename'].replace('\\', '/')
 
     # Set up render globals for vray export. These changes will
     # be reverted later when we run cmds.undo().
@@ -2127,11 +2154,11 @@ class SubmitWindow(object):
     cmds.setAttr('defaultRenderGlobals.startFrame', start_frame)
     cmds.setAttr('defaultRenderGlobals.endFrame', end_frame)
     # Set resolution of the scene to layer resolution to avoid problems with regions.
-    cmds.setAttr('vraySettings.width', layer_params['xres'])
-    cmds.setAttr('vraySettings.height', layer_params['yres'])
+    cmds.setAttr('vraySettings.width', render_params['xres'])
+    cmds.setAttr('vraySettings.height', render_params['yres'])
 
     # Run the export.
-    maya.mel.eval('vrend -camera "%s" -layer "%s"' % (layer_params['camera'], layer))
+    maya.mel.eval('vrend -camera "%s" -layer "%s"' % (render_params['camera'], layer))
 
     cmds.undoInfo(closeChunk=True)
     cmds.undo()
@@ -2148,16 +2175,16 @@ class SubmitWindow(object):
         '%s_%s%s' % (vrscene_base, layer, ext)
       ]
 
-    return possible_scene_names, layer_params
+    return possible_scene_names, render_params
 
   @staticmethod
-  def export_ass(ass_path, layer, render_params, start_frame, end_frame):
+  def export_ass(ass_path, layer, params, start_frame, end_frame):
     """Export .ass files of the current scene.
 
     Args:
       ass_path: str, path to which to export the .ass files
       layer: str, the name of the render layer to export
-      render_params: dict, render job parameters
+      params: dict, render job parameters
       start_frame: int, the first frame to export
       end_frame: int, the last frame to export
 
@@ -2176,10 +2203,10 @@ class SubmitWindow(object):
     scene_head, extension = os.path.splitext(scene_path)
     scene_name = os.path.basename(scene_head)
 
-    layer_params = copy.deepcopy(render_params)
+    render_params = copy.deepcopy(params)
 
-    layer_params['project_dir'] = render_params['project']
-    layer_params['output_dir'] = render_params['out_path']
+    render_params['project_dir'] = params['project']
+    render_params['output_dir'] = params['out_path']
 
     tail = cmds.getAttr('defaultRenderGlobals.imageFilePrefix')
     if not tail:
@@ -2187,7 +2214,7 @@ class SubmitWindow(object):
     else:
       tail = tail.replace('%s', scene_name)
       tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
-      clean_camera = render_params['camera'].replace(':', '_')
+      clean_camera = params['camera'].replace(':', '_')
       tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
         flags=re.IGNORECASE)
       tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
@@ -2202,9 +2229,8 @@ class SubmitWindow(object):
     if tail[-1] != '.':
       tail += '.'
 
-    layer_params['output_filename'] = '%s.%s' % (
-      tail, render_params['scene_info']['extension'])
-    layer_params['output_filename'] = layer_params['output_filename'].replace('\\', '/')
+    render_params['output_filename'] = '%s.%s' % (tail, params['scene_info']['extension'])
+    render_params['output_filename'] = params['output_filename'].replace('\\', '/')
 
     ass_base, ext = os.path.splitext(ass_path)
     layer_mangled = md5.new(layer).hexdigest()[:4]
@@ -2212,17 +2238,16 @@ class SubmitWindow(object):
     layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
 
     ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, end_frame) +
-      '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (layer_params['step'], start_frame) +
-      '-shadowLinks 1 -cam %s' % (render_params['camera'],))
+      '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (render_params['step'], start_frame) +
+      '-shadowLinks 1 -cam %s' % (params['camera'],))
     maya.mel.eval(ass_cmd)
 
     cmds.undoInfo(closeChunk=True)
     cmds.undo()
 
-    return layer_file_wildcard, layer_params
+    return layer_file_wildcard, render_params
 
-  @staticmethod
-  def get_standalone_scene_path(suffix, window):
+  def get_standalone_scene_path(self, suffix):
     """Get a file path for exporting a standalone scene, based on current scene
     and matching the Zync convention of where these files should be stored.
 
@@ -2238,28 +2263,24 @@ class SubmitWindow(object):
     scene_path = cmds.file(q=True, loc=True)
     scene_head, _ = os.path.splitext(scene_path)
     scene_name = os.path.basename(scene_head)
-    return window.zync_conn.generate_file_path(
+    return self.zync_conn.generate_file_path(
         '%s.%s' % (scene_head, suffix)).replace('\\', '/')
 
-  @staticmethod
-  def verify_eula_acceptance(zync_conn):
+  def verify_eula_acceptance(self):
     """Verify Autodesk EULA acceptance and if needed perform acceptance flow.
-
-    Args:
-      zync_conn: zync.Zync, connection to Zync
 
     Returns:
       bool, True if EULA is accepted, False if user declined
     """
     # find the Maya EULA
     maya_eula = None
-    for eula in zync_conn.get_eulas():
+    for eula in self.zync_conn.get_eulas():
       if eula.get('eula_kind').lower() == 'mayaio':
         maya_eula = eula
         break
     # blank accepted_by field indicates not yet accepted
     if maya_eula and not maya_eula.get('accepted_by'):
-      eula_url = '%s/account#legal' % zync_conn.url
+      eula_url = '%s/account#legal' % self.zync_conn.url
       # let the user know what's about to happen
       cmds.confirmDialog(title='Accept EULA', message=('In order to launch ' +
                          'Maya jobs you must accept the Autodesk EULA. It ' +
