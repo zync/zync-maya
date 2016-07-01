@@ -895,8 +895,18 @@ def _rman_translate_format_to_extension(image_format):
 
 
 def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
-  """Returns scene info for the current scene."""
+  """Returns scene info for the current scene.
 
+  Args:
+    renderer: str, the renderer that will be used - some info returned is
+              renderer-specific
+    layers_to_render: [str], list of render layers that will be rendered
+    is_bake: bool, whether job is a bake job
+    extra_assets: [str], list of any extra files to include
+
+  Returns:
+    dict of scene information
+  """
   print '--> initializing'
   clear_layer_info()
 

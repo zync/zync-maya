@@ -84,7 +84,7 @@ def run_maya_and_get_scene_info(scene, renderer, layers, maya_version):
     # already so no need to join
     script_text += '[\'%s\'], ' % layers
     # is_bake
-    script_text += 'False)"); '
+    script_text += 'False, [])"); '
     script_text += 'string $output_file = "%s"; ' % scene_info_file
     script_text += '$fp = `fopen $output_file "w"`; '
     script_text += 'fprint $fp $scene_info; '
