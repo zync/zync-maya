@@ -12,23 +12,13 @@ Before trying to install zync-maya, make sure to [download zync-python](https://
 
 Clone this repository to the desired location on your local system. If you're doing a site-wide plugin install, this will have to be a location accessible by everyone using the plugins. 
 
-## Register Script
-
-Log in to the Zync Web Console, and go to the My Account page.
-
-In the "Scripts" section, you may see a script called "maya_plugin". If you do, save the API key shown there for the next step. If you don't see "maya_plugin", create a new script with that name. An API key will be generated which you'll use in the next step.
-
 ## Config File
 
 Contained in this folder you'll find a file called ```config_maya.py.example```. Make a copy of this file in the same directory, and rename it ```config_maya.py```.
 
-Edit ```config_maya.py``` in a Text Editor. It defines two config variables:
+Edit ```config_maya.py``` in a Text Editor. It defines one config variable - `API_DIR` - the full path to your zync-python directory.
 
-```API_DIR``` - the full path to your zync-python directory.
-
-```API_KEY``` - the API Key of the registered script, from the previous step.
-
-Set these variables, save the file, and close it.
+Set `API_DIR` to point to the zync-python you installed earlier, save the file, and close it.
 
 ## Maya.env
 
@@ -57,4 +47,3 @@ XBMLANGPATH = /usr/local/zync/plugins/zync-maya/%B
 ```
 
 For more information on setting up a Maya.env file, see the page "Setting environment variables using Maya.env" in the Maya Help Docs.
-
