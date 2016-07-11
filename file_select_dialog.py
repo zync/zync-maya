@@ -42,7 +42,7 @@ class CheckableDirModel(QDirModel):
   def get_selected_files(self, selected_files):
     selected_files.clear()
     for full_name in self.files:
-      if self.files[file] == QtCore.Qt.Checked:
+      if self.files[full_name] == QtCore.Qt.Checked:
         selected_files.add(full_name)
 
   def flags(self, index):
