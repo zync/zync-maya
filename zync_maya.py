@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.2'
+__version__ = '1.2.3'
 
 import copy
 import file_select_dialog
@@ -26,6 +26,7 @@ import string
 import sys
 import traceback
 import webbrowser
+from distutils.version import StrictVersion
 
 # pylint: disable=import-error
 from maya import OpenMayaUI
@@ -50,8 +51,7 @@ import zync
 
 UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
-_XGEN_IMPORT_ERROR = None
-
+_VERSION_CHECK_RESULT = None
 
 # a list of Xgen attributes which contain filenames we should include for upload
 _XGEN_FILE_ATTRS = [
@@ -59,6 +59,7 @@ _XGEN_FILE_ATTRS = [
   'wiresFile',
 ]
 
+_XGEN_IMPORT_ERROR = None
 
 import maya.cmds as cmds
 import maya.mel
@@ -2315,8 +2316,66 @@ def submit_dialog():
   try:
     submit_window = SubmitWindow()
     submit_window.show()
+    # show update notification last so it gets focus
+    if not is_latest_version():
+      show_update_notification()
   # Maya only prints the last line of the exception, so capture and log
   # the full stacktrace before allowing the exception to propagate.
   except:
     print traceback.format_exc()
     raise
+
+
+def is_latest_version():
+  global _VERSION_CHECK_RESULT
+  if _VERSION_CHECK_RESULT is None:
+    try:
+      _VERSION_CHECK_RESULT = _is_latest_version()
+    # if there's an exception during version check, print the exception but
+    # assume user is up to date. we don't want to block them launching jobs.
+    except:
+      print 'Exception checking version number'
+      print traceback.format_exc()
+      return True
+  return _VERSION_CHECK_RESULT
+
+
+def _is_latest_version():
+  print 'running Zync version check'
+  versions_to_check = (
+    (__version__, 'https://api.zyncrender.com/zync_maya/version'),
+    (zync.__version__, 'https://api.zyncrender.com/zync_python/version'),
+  )
+  http = zync.httplib2.Http()
+  for local_version, publish_url in versions_to_check:
+    print 'checking URL %s' % publish_url
+    print 'local version %s' % local_version
+    response, published_version = http.request(publish_url, 'GET')
+    print 'published version %s' % published_version
+    if StrictVersion(local_version) >= StrictVersion(published_version):
+      print 'up to date'
+    else:
+      print 'update is needed'
+      return False
+  return True
+
+
+def show_update_notification():
+  def _link(url, text):
+    return ('<a style="color:#ff8a00;" href="%s">%s</a>') % (url, text)
+
+  window_name = cmds.window(title='Zync Update Available', width=400, height=165)
+
+  cmds.columnLayout('l', rowSpacing=8, columnAttach=('both', 100))
+  cmds.text(label='<br>An update to the Zync plugin has<br>been released.',
+            align="center", width=200)
+  cmds.text(label=_link('https://download.zyncrender.com', 'Download the Update'),
+            hyperlink=True, align="center", width=200)
+  cmds.text(label=_link('https://sites.google.com/site/zyncpublic/doc/update-plugins',
+            'Plugin Update HOWTO'), hyperlink=True, align="center", width=200)
+  cmds.text(label='  Once the update is installed, please<br>restart Maya to complete the process.',
+            align="center", width=200)
+  cmds.button(label='Close', width=200, align='center',
+              command='cmds.deleteUI("%s", window=True)' % window_name)
+
+  cmds.showWindow()
