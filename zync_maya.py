@@ -1168,7 +1168,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
         # up in the defaultArnoldDriver
         output_prefix_aov_warning = False
         for output in prefixes_to_verify:
-          if '<RenderPass>' not in output:
+          if not output or '<RenderPass>' not in output:
             output_prefix_aov_warning = True
         if (output_prefix_aov_warning and not override_prefix) or \
             (override_prefix and '<RenderPass>' not in override_prefix):
