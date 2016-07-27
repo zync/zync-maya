@@ -18,6 +18,8 @@ __version__ = '1.2.3'
 
 import copy
 import file_select_dialog
+import functools
+import imp
 import math
 import md5
 import os
@@ -28,24 +30,56 @@ import traceback
 import webbrowser
 from distutils.version import StrictVersion
 
+zync = None
 
-if os.environ.get('ZYNC_API_DIR'):
-  API_DIR = os.environ.get('ZYNC_API_DIR')
-else:
-  config_path = '%s/config_maya.py' % (os.path.dirname(__file__),)
-  if not os.path.exists(config_path):
-    raise Exception('Could not locate config_maya.py, please create.')
-  # pylint: disable=import-error
-  from config_maya import *
 
-required_config = ['API_DIR']
+def show_exceptions(func):
+  """Error-showing decorator for all entry points
 
-for key in required_config:
-  if not key in globals():
-    raise Exception('config_maya.py must define a value for %s.' % (key,))
+  Catches all exceptions and shows them on the screen and in console before
+  re-raising. Uses `exception_already_shown` attribute to prevent showing
+  the same exception twice.
+  """
+  @functools.wraps(func)
+  def wrapped(*args, **kwargs):
+    try:
+      return func(*args, **kwargs)
+    except Exception as e:
+      if not getattr(e, 'exception_already_shown', False):
+        traceback.print_exc()
+        cmds.confirmDialog(title='Error', message=e.message, button='OK',
+                           defaultButton='OK', icon='critical')
+        e.exception_already_shown = True
+      raise
+  return wrapped
 
-sys.path.append(API_DIR)
-import zync
+# Importing zync-python is deferred until user's action (i.e. attempt
+# to open plugin window), because we are not able to reliably show message
+# windows any time earlier. Zync-python is not needed for plugin to load.
+@show_exceptions
+def import_zync_python():
+  """Imports zync-python"""
+  global zync
+  if zync:
+    return
+
+  if os.environ.get('ZYNC_API_DIR'):
+    API_DIR = os.environ.get('ZYNC_API_DIR')
+  else:
+    config_path = os.path.join(os.path.dirname(__file__), 'config_maya.py')
+    if not os.path.exists(config_path):
+      raise MayaZyncException(
+        "Plugin configuration incomplete: zync-python path not provided.\n\n"
+        "Re-installing the plugin may solve the problem.")
+    import imp
+    config_maya = imp.load_source('config_maya', config_path)
+    API_DIR = config_maya.API_DIR
+    if not isinstance(API_DIR, basestring):
+      raise MayaZyncException("API_DIR defined in config_maya.py is not a string")
+
+  sys.path.append(API_DIR)
+  import zync
+
 
 UI_FILE = '%s/resources/submit_dialog.ui' % (os.path.dirname(__file__),)
 
@@ -1204,18 +1238,7 @@ def _unused(*args):
 
 
 class MayaZyncException(Exception):
-  """
-  This exception issues a Maya warning.
-  """
-  def __init__(self, msg, *args, **kwargs):
-    # log message to the console
-    cmds.warning(msg)
-    # open a dialog showing error to user. in batch mode this does nothing
-    cmds.confirmDialog(title='Error',
-      message=msg,
-      button='OK', defaultButton='OK', icon='critical')
-    super(MayaZyncException, self).__init__(msg, *args, **kwargs)
-
+  pass
 
 class ZyncAbortedByUser(Exception):
   """
@@ -1228,11 +1251,13 @@ class SubmitWindow(object):
   """
   A Maya UI window for submitting to Zync
   """
+  @show_exceptions
   def __init__(self, title='Zync Submit (version %s)' % __version__):
     """
     Constructs the window.
     You must call show() to display the window.
     """
+    import_zync_python()
     self.title = title
 
     scene_name = cmds.file(q=True, loc=True)
@@ -1360,6 +1385,7 @@ class SubmitWindow(object):
 
     return name
 
+  @show_exceptions
   def upload_only_toggle(self, checked):
     if checked:
       cmds.textField('num_instances', e=True, en=False)
@@ -1401,6 +1427,7 @@ class SubmitWindow(object):
       cmds.textField('x_res', e=True, en=True)
       cmds.textField('y_res', e=True, en=True)
 
+  @show_exceptions
   def distributed_toggle(self, checked):
     """Event triggered when the Distributed Rendering control
     is toggled.
@@ -1411,6 +1438,7 @@ class SubmitWindow(object):
     # if DR is on use of standalone is required
     cmds.checkBox('use_standalone', e=True, en=not checked, value=checked)
 
+  @show_exceptions
   def sync_extra_assets_toggle(self, checked):
     """Event triggered when the Sync Extra Assets control is toggled.
 
@@ -1419,16 +1447,19 @@ class SubmitWindow(object):
     """
     cmds.button('select_files', e=True, enable=checked)
 
+  @show_exceptions
   def change_num_instances(self, *args, **kwargs):
     _unused(args)
     _unused(kwargs)
     self.update_est_cost()
 
+  @show_exceptions
   def change_instance_type(self, *args, **kwargs):
     _unused(args)
     _unused(kwargs)
     self.update_est_cost()
 
+  @show_exceptions
   def change_renderer(self, renderer):
     if renderer in ('vray', 'V-Ray'):
       renderer_key = 'vray'
@@ -1489,6 +1520,7 @@ class SubmitWindow(object):
     self.change_standalone(eval_ui('use_standalone', 'checkBox', v=True))
     self.init_output_dir()
 
+  @show_exceptions
   def change_job_type(self, job_type):
     job_type = job_type.lower()
     if job_type == 'render':
@@ -1522,6 +1554,7 @@ class SubmitWindow(object):
     else:
       cmds.error('Unknown Job Type "%s".' % (job_type,))
 
+  @show_exceptions
   def change_layers(self):
     if cmds.optionMenu('job_type', q=True, v=True).lower() != 'bake':
       return
@@ -1532,6 +1565,7 @@ class SubmitWindow(object):
     cmds.textField('x_res', e=True, tx=cmds.getAttr('%s.resolutionX' % (bake_set,)))
     cmds.textField('y_res', e=True, tx=cmds.getAttr('%s.resolutionY' % (bake_set,)))
 
+  @show_exceptions
   def change_standalone(self, checked):
     """Event triggered when the Use Standalone control is toggled.
 
@@ -1546,11 +1580,13 @@ class SubmitWindow(object):
     else:
       cmds.textField('chunk_size', e=True, en=self.chunk_size_allowed)
 
+  @show_exceptions
   def select_new_project(self, selected):
     if selected:
       cmds.textField('new_project_name', e=True, en=True)
       cmds.optionMenu('existing_project_name', e=True, en=False)
 
+  @show_exceptions
   def select_existing_project(self, selected):
     if selected:
       cmds.textField('new_project_name', e=True, en=False)
@@ -1668,6 +1704,7 @@ class SubmitWindow(object):
 
     return params
 
+  @show_exceptions
   def show(self):
     """
     Displays the window.
@@ -1881,6 +1918,7 @@ class SubmitWindow(object):
   def clear_user_label(self):
     cmds.text('google_login_status', e=True, label='')
 
+  @show_exceptions
   def get_initial_value(self, name):
     """Returns the initial value for a given attribute.
 
@@ -1899,20 +1937,24 @@ class SubmitWindow(object):
     else:
       return 'Undefined'
 
+  @show_exceptions
   def login_with_google(self):
     """Perform the Google OAuth flow."""
     self.login_type = 'google'
     self.zync_conn.login_with_google()
     self.set_user_label(self.zync_conn.email)
 
+  @show_exceptions
   def logout(self):
     self.zync_conn.logout()
     self.clear_user_label()
 
+  @show_exceptions
   def select_files(self):
     self.file_select_dialog = file_select_dialog.FileSelectDialog(self.extra_assets)
     self.file_select_dialog.show()
 
+  @show_exceptions
   def submit(self):
     """Submit a job to Zync."""
     if not self.zync_conn.has_user_login():
@@ -2305,18 +2347,13 @@ class SubmitWindow(object):
     return True
 
 
+@show_exceptions
 def submit_dialog():
-  try:
-    submit_window = SubmitWindow()
-    submit_window.show()
-    # show update notification last so it gets focus
-    if not is_latest_version():
-      show_update_notification()
-  # Maya only prints the last line of the exception, so capture and log
-  # the full stacktrace before allowing the exception to propagate.
-  except:
-    print traceback.format_exc()
-    raise
+  submit_window = SubmitWindow()
+  submit_window.show()
+  # show update notification last so it gets focus
+  if not is_latest_version():
+    show_update_notification()
 
 
 def is_latest_version():
@@ -2335,6 +2372,7 @@ def is_latest_version():
 
 def _is_latest_version():
   print 'running Zync version check'
+  import_zync_python()
   versions_to_check = (
     (__version__, 'https://api.zyncrender.com/zync_maya/version'),
     (zync.__version__, 'https://api.zyncrender.com/zync_python/version'),
