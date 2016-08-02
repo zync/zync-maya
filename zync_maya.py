@@ -2030,9 +2030,7 @@ class SubmitWindow(object):
                                    'was not found. Unable to submit job.')
 
             print 'Submitting job for layer %s...' % layer
-
-            renderer = 'vray'
-            scene_file = layer_file
+            self.zync_conn.submit_job('vray', layer_file, params=render_params)
 
         elif params['renderer'] == 'arnold':
           print 'Arnold job, collecting additional info...'
@@ -2044,10 +2042,10 @@ class SubmitWindow(object):
             print 'Exporting layer %s...' % layer
             layer_file_wildcard, render_params = self.export_ass(ass_path,
                 layer, params, sf, ef)
-            print 'Submitting job for layer %s...' % layer
 
-            renderer = 'arnold'
-            scene_file = layer_file_wildcard
+            print 'Submitting job for layer %s...' % layer
+            self.zync_conn.submit_job('arnold', layer_file_wildcard, params=render_params)
+
         else:
           raise MayaZyncException('Renderer %s unsupported for standalone rendering.' % params['renderer'])
 
@@ -2082,13 +2080,9 @@ class SubmitWindow(object):
         if not self.verify_eula_acceptance():
           cmds.error('Job submission canceled.')
 
-        renderer = 'maya'
-        scene_file = scene_path
-        render_params = params
-
-      self.zync_conn.submit_job(renderer, scene_file, params=render_params)
-      cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
-        button='OK', defaultButton='OK')
+        self.zync_conn.submit_job('maya', scene_path, params=params)
+        cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
+          button='OK', defaultButton='OK')
 
     except zync.ZyncPreflightError as e:
       cmds.confirmDialog(title='Preflight Check Failed', message=str(e),
@@ -2276,7 +2270,7 @@ class SubmitWindow(object):
       tail += '.'
 
     render_params['output_filename'] = '%s.%s' % (tail, params['scene_info']['extension'])
-    render_params['output_filename'] = params['output_filename'].replace('\\', '/')
+    render_params['output_filename'] = render_params['output_filename'].replace('\\', '/')
 
     ass_base, ext = os.path.splitext(ass_path)
     layer_mangled = md5.new(layer).hexdigest()[:4]
