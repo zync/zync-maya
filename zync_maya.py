@@ -1189,6 +1189,16 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
     else:
       scene_info['aovs'] = []
 
+  # collect info on whether scene uses Legacy Render Layers or new Render
+  # Setup system (Maya 2016.5 and higher only)
+  if float(get_maya_version()) >= 2016.5:
+    print '--> renderSetupEnable'
+    # 0 or 1. 0 = legacy render layers, 1 = new render setup system
+    if cmds.optionVar(exists='renderSetupEnable'):
+      scene_info['renderSetupEnable'] = cmds.optionVar(query='renderSetupEnable')
+    else:
+      scene_info['renderSetupEnable'] = 1
+
   return scene_info
 
 
