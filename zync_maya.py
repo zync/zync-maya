@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.5'
+__version__ = '1.2.6'
 
 import copy
 import file_select_dialog
@@ -47,7 +47,7 @@ def show_exceptions(func):
     except Exception as e:
       if not getattr(e, 'exception_already_shown', False):
         traceback.print_exc()
-        cmds.confirmDialog(title='Error', message=e.message, button='OK',
+        cmds.confirmDialog(title='Error', message=unicode(e.message), button='OK',
                            defaultButton='OK', icon='critical')
         e.exception_already_shown = True
       raise
