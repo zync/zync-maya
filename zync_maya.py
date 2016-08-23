@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.6'
+__version__ = '1.2.7'
 
 import copy
 import file_select_dialog
@@ -494,7 +494,8 @@ def _vrayPtex_handler(node):
 
 
 def _vrayVolumeGrid_handler(node):
-  yield cmds.getAttr('%s.if' % node)
+  path = cmds.getAttr('%s.if' % node)
+  yield seq_to_glob(path)
 
 
 def _vrayScene_handler(node):
