@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.7'
+__version__ = '1.2.8'
 
 import copy
 import file_select_dialog
@@ -1637,7 +1637,7 @@ class SubmitWindow(object):
     params['upload_only'] = int(eval_ui('upload_only', 'checkBox', v=True))
     params['start_new_slots'] = self.start_new_slots
     params['skip_check'] = int(eval_ui('skip_check', 'checkBox', v=True))
-    params['notify_complete'] = self.notify_complete
+    params['notify_complete'] = int(eval_ui('notify_complete', 'checkBox', v=True))
     params['project'] = eval_ui('project', text=True)
     params['sync_extra_assets'] = int(eval_ui('sync_extra_assets', 'checkBox', v=True))
 

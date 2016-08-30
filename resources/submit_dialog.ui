@@ -93,7 +93,7 @@
           <property name="bottomMargin">
            <number>10</number>
           </property>
-          <item row="21" column="1">
+          <item row="22" column="1">
            <widget class="QLineEdit" name="frame_step">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -114,7 +114,7 @@
             </property>
            </widget>
           </item>
-          <item row="19" column="1">
+          <item row="20" column="1">
            <layout class="QHBoxLayout" name="horizontalLayout_3">
             <item>
              <widget class="QCheckBox" name="use_standalone">
@@ -147,7 +147,7 @@
             </item>
            </layout>
           </item>
-          <item row="18" column="1">
+          <item row="19" column="1">
            <layout class="QHBoxLayout" name="horizontalLayout_12">
             <item>
              <widget class="QCheckBox" name="distributed">
@@ -183,7 +183,7 @@
             </item>
            </layout>
           </item>
-          <item row="23" column="0">
+          <item row="24" column="0">
            <widget class="QLabel" name="label_10">
             <property name="font">
              <font>
@@ -198,7 +198,7 @@
             </property>
            </widget>
           </item>
-          <item row="25" column="1">
+          <item row="26" column="1">
            <layout class="QHBoxLayout" name="horizontalLayout">
             <property name="spacing">
              <number>6</number>
@@ -311,7 +311,7 @@
             </item>
            </layout>
           </item>
-          <item row="23" column="1">
+          <item row="24" column="1">
            <widget class="QComboBox" name="camera">
             <property name="font">
              <font>
@@ -366,7 +366,40 @@
             </item>
            </layout>
           </item>
-          <item row="21" column="0">
+          <item row="12" column="1">
+           <layout class="QHBoxLayout" name="horizontalLayout_6">
+            <item>
+             <widget class="QCheckBox" name="notify_complete">
+              <property name="toolTip">
+               <string>Zync will send you an email when this job completes, or if it fails.</string>
+              </property>
+              <property name="text">
+               <string>Notify on Job Completion</string>
+              </property>
+              <property name="-v" stdset="0">
+               <string>`python &quot;cmds.submit_callb('notify_complete')&quot;`</string>
+              </property>
+             </widget>
+            </item>
+            <item>
+             <spacer name="horizontalSpacer_15">
+              <property name="orientation">
+               <enum>Qt::Horizontal</enum>
+              </property>
+              <property name="sizeType">
+               <enum>QSizePolicy::Fixed</enum>
+              </property>
+              <property name="sizeHint" stdset="0">
+               <size>
+                <width>80</width>
+                <height>20</height>
+               </size>
+              </property>
+             </spacer>
+            </item>
+           </layout>
+          </item>
+          <item row="22" column="0">
            <widget class="QLabel" name="label_8">
             <property name="font">
              <font>
@@ -438,7 +471,7 @@
             </property>
            </widget>
           </item>
-          <item row="15" column="1">
+          <item row="16" column="1">
            <widget class="QComboBox" name="renderer">
             <property name="-ann" stdset="0">
              <string>`python &quot;cmds.submit_callb('renderer')&quot;`</string>
@@ -463,7 +496,7 @@
             </property>
            </widget>
           </item>
-          <item row="22" column="1">
+          <item row="23" column="1">
            <widget class="QLineEdit" name="chunk_size">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -484,7 +517,7 @@
             </property>
            </widget>
           </item>
-          <item row="22" column="0">
+          <item row="23" column="0">
            <widget class="QLabel" name="label_9">
             <property name="font">
              <font>
@@ -499,7 +532,7 @@
             </property>
            </widget>
           </item>
-          <item row="14" column="1">
+          <item row="15" column="1">
            <widget class="QLineEdit" name="output_dir">
             <property name="placeholderText">
              <string>Path to the output directory...</string>
@@ -516,7 +549,7 @@
             </property>
            </widget>
           </item>
-          <item row="20" column="0">
+          <item row="21" column="0">
            <widget class="QLabel" name="frange_label">
             <property name="font">
              <font>
@@ -531,7 +564,7 @@
             </property>
            </widget>
           </item>
-          <item row="24" column="0">
+          <item row="25" column="0">
            <widget class="QLabel" name="layers_label">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
@@ -552,7 +585,7 @@
             </property>
            </widget>
           </item>
-          <item row="16" column="0">
+          <item row="17" column="0">
            <widget class="QLabel" name="job_type_label">
             <property name="font">
              <font>
@@ -598,7 +631,7 @@
             </item>
            </layout>
           </item>
-          <item row="20" column="1">
+          <item row="21" column="1">
            <widget class="QLineEdit" name="frange">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -619,7 +652,7 @@
             </property>
            </widget>
           </item>
-          <item row="25" column="0">
+          <item row="26" column="0">
            <widget class="QLabel" name="label_12">
             <property name="font">
              <font>
@@ -782,7 +815,7 @@
             </item>
            </layout>
           </item>
-          <item row="14" column="0">
+          <item row="15" column="0">
            <widget class="QLabel" name="label_5">
             <property name="font">
              <font>
@@ -819,7 +852,7 @@
             </property>
            </widget>
           </item>
-          <item row="15" column="0">
+          <item row="16" column="0">
            <widget class="QLabel" name="label_6">
             <property name="font">
              <font>
@@ -882,7 +915,7 @@
             </property>
            </widget>
           </item>
-          <item row="24" column="1">
+          <item row="25" column="1">
            <widget class="QListWidget" name="layers">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -925,7 +958,7 @@
             </property>
            </widget>
           </item>
-          <item row="13" column="0">
+          <item row="14" column="0">
            <widget class="QLabel" name="label_4">
             <property name="font">
              <font>
@@ -953,7 +986,7 @@
             </property>
            </widget>
           </item>
-          <item row="13" column="1">
+          <item row="14" column="1">
            <widget class="QLineEdit" name="project">
             <property name="placeholderText">
              <string>Path to the project...</string>
@@ -976,7 +1009,7 @@
             </property>
            </widget>
           </item>
-          <item row="17" column="1">
+          <item row="18" column="1">
            <layout class="QHBoxLayout" name="horizontalLayout_10">
             <item>
              <widget class="QCheckBox" name="vray_nightly">
@@ -1006,7 +1039,7 @@
             </item>
            </layout>
           </item>
-          <item row="16" column="1">
+          <item row="17" column="1">
            <widget class="QComboBox" name="job_type">
             <property name="-ann" stdset="0">
              <string>`python &quot;cmds.submit_callb('job_type')&quot;`</string>
@@ -1023,7 +1056,7 @@
             </property>
            </widget>
           </item>
-          <item row="12" column="1">
+          <item row="13" column="1">
            <widget class="QFrame" name="extra_assets_frame">
             <property name="sizePolicy">
              <sizepolicy hsizetype="Fixed" vsizetype="Fixed">
