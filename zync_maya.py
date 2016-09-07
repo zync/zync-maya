@@ -581,6 +581,10 @@ def _pxrPtexture_handler(node):
   yield cmds.getAttr('%s.filename' % node)
 
 
+def _pxrNormalMap_handler(node):
+  yield cmds.getAttr('%s.filename' % node)
+
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {
@@ -617,6 +621,7 @@ def get_scene_files():
     'aiVolume': _aiVolume_handler,
     'MASH_Waiter': _mash_handler,
     'PxrPtexture': _pxrPtexture_handler,
+    'PxrNormalMap': _pxrNormalMap_handler,
   }
 
   for file_type in file_types:
