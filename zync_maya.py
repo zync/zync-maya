@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.8'
+__version__ = '1.2.9'
 
 import copy
 import file_select_dialog
@@ -1984,9 +1984,10 @@ class SubmitWindow(object):
       if not self.extra_assets:
         raise MayaZyncException('No extra assets selected')
 
+    confirm_mesage = 'Yes, submit job.'
+    cancel_message = 'No, cancel job submission.'
+
     if '(ALPHA)' in params.get('instance_type', ''):
-      confirm_mesage = 'Yes, submit job.'
-      cancel_message = 'No, cancel job submission.'
       alpha_warning_result = cmds.confirmDialog(
           title='ALPHA instance type selected',
           message=('You\'ve selected an instance type for your job which is '
@@ -1998,6 +1999,21 @@ class SubmitWindow(object):
           cancelButton=cancel_message,
           icon='warning')
       if alpha_warning_result != confirm_mesage:
+        raise ZyncAbortedByUser('Aborted by user')
+
+    if (cmds.attributeQuery('animation', node='defaultRenderGlobals', exists=True) and
+        not cmds.getAttr('defaultRenderGlobals.animation')):
+      animation_warning_result = cmds.confirmDialog(
+          title='Animation Off',
+          message=('It looks like you have animation disabled in your scene. '
+                   'If you render multiple frames they will probably overwrite '
+                   'each other. Are you sure you want to submit the job using '
+                   'these render settings?'),
+          button=(confirm_mesage, cancel_message),
+          defaultButton=confirm_mesage,
+          cancelButton=cancel_message,
+          icon='warning')
+      if animation_warning_result != confirm_mesage:
         raise ZyncAbortedByUser('Aborted by user')
 
     print 'Collecting scene info...'
