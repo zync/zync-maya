@@ -89,6 +89,7 @@ _VERSION_CHECK_RESULT = None
 _XGEN_FILE_ATTRS = [
   'files',
   'wiresFile',
+  'cacheFileName',
 ]
 
 _XGEN_IMPORT_ERROR = None
