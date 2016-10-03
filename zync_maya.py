@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.9'
+__version__ = '1.2.10'
 
 import copy
 import file_select_dialog
@@ -1718,6 +1718,9 @@ class SubmitWindow(object):
       layers = ','.join(layers)
       params['layers'] = layers
       params['bake_sets'] = None
+
+    if params['distributed'] and 'PREEMPTIBLE' in selected_type:
+      raise MayaZyncException('Distributed rendering jobs cannot use preemptible instances.')
 
     return params
 
