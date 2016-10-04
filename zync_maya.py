@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.10'
+__version__ = '1.2.11'
 
 import copy
 import file_select_dialog
