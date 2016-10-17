@@ -557,6 +557,18 @@ def _pxrTexture_handler(node):
   else:
     yield re.sub('_MAPID_', '*', filename)
 
+def _pxrMultiTexture_handler(node):
+  """Handles PxrMultiTexture nodes"""
+  for texture_id in range(0,10):
+    filename = cmds.getAttr('%s.filename%d' % (node, texture_id))
+    if filename:
+      yield filename
+
+def _pxrDomeLight_handler(node):
+  """Handles PxrDomeLight nodes"""
+  filename = cmds.getAttr('%s.lightColorMap' % node)
+  if filename:
+    yield filename
 
 def _rmsEnvLight_handler(node):
   """Handles RMSEnvLight nodes"""
@@ -619,6 +631,9 @@ def get_scene_files():
     'RenderManArchive': _ribArchive_handler,
     'PxrStdEnvMapLight': _pxrStdEnvMap_handler,
     'PxrTexture': _pxrTexture_handler,
+    'PxrBump': _pxrTexture_handler, # PxrBump and PxrTexture are identical.
+    'PxrMultiTexture': _pxrMultiTexture_handler,
+    'PxrDomeLight': _pxrDomeLight_handler,
     'RMSEnvLight': _rmsEnvLight_handler,
     'OpenVDBRead': _openVDBRead_handler,
     'aiVolume': _aiVolume_handler,
