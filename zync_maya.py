@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.11'
+__version__ = '1.2.12'
 
 import copy
 import file_select_dialog
@@ -1097,9 +1097,8 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
   scene_info['files'] = list(set(get_scene_files()))
   for full_name in extra_assets:
     if os.path.isdir(full_name):
-      scene_info['files'].append(os.path.join(full_name, '*'))
-    else:
-      scene_info['files'].append(full_name)
+      full_name = os.path.join(full_name, '*')
+    scene_info['files'].append(full_name.replace('\\', '/'))
   # Xgen files are already included in the main files list, but we also
   # include them separately so Zync can perform Xgen-related tasks on
   # the much smaller subset

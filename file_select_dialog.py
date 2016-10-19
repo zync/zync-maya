@@ -14,6 +14,7 @@ try:
   QDialog = PySide.QtGui.QDialog
   QDialogButtonBox = PySide.QtGui.QDialogButtonBox
   QDirModel = PySide.QtGui.QDirModel
+  QHeaderView = PySide.QtGui.QHeaderView
   QTreeView = PySide.QtGui.QTreeView
 except:
   import pyside2uic as pysideuic
@@ -23,13 +24,15 @@ except:
   QDialog = PySide2.QtWidgets.QDialog
   QDialogButtonBox = PySide2.QtWidgets.QDialogButtonBox
   QDirModel = PySide2.QtWidgets.QDirModel
+  QHeaderView = PySide2.QtWidgets.QHeaderView
   QTreeView = PySide2.QtWidgets.QTreeView
 
 import xml.etree.ElementTree as ElementTree
 
 from cStringIO import StringIO
 
-UI_SELECT_FILES = '%s/resources/select_files_dialog.ui' % (os.path.dirname(__file__),)
+UI_SELECT_FILES = '%s/resources/select_files_dialog.ui' % os.path.dirname(__file__)
+UI_ICON_FILE_STEM = '%s/resources/%%s' % os.path.dirname(__file__)
 
 class CheckableDirModel(QDirModel):
   """Extends QDirModel by adding checkboxes next to files and
@@ -39,11 +42,14 @@ class CheckableDirModel(QDirModel):
     QDirModel.__init__(self, None)
     self.files = {}
 
+  def set_tree_view(self, tree_view):
+    self.tree_view = tree_view
+
   def get_selected_files(self, selected_files):
     selected_files.clear()
-    for full_name in self.files:
-      if self.files[full_name] == QtCore.Qt.Checked:
-        selected_files.add(full_name)
+    for filename, status in self.files.items():
+      if status == QtCore.Qt.Checked:
+        self._addSelectedFiles(filename, selected_files)
 
   def flags(self, index):
     return QDirModel.flags(self, index) | QtCore.Qt.ItemIsUserCheckable
@@ -54,70 +60,79 @@ class CheckableDirModel(QDirModel):
     else:
       if index.column() == 0:
         filename = self.filePath(index)
-        if filename in self.files:
-          value = self.files[filename]
-          if value == QtCore.Qt.PartiallyChecked:
-            return self._getCheckStatusDown(filename)
-          else:
-            return value
+        if self.files.get(filename, QtCore.Qt.Unchecked) == QtCore.Qt.PartiallyChecked:
+          return QtCore.Qt.PartiallyChecked
         else:
-          return self._getCheckStatusUp(filename)
+          return self._getCheckStatus(filename)
 
   def setData(self, index, value, role):
-    if (role == QtCore.Qt.CheckStateRole and index.column() == 0):
+    if role == QtCore.Qt.CheckStateRole and index.column() == 0:
       filename = self.filePath(index)
-      self._checkUp(filename)
-      self._clearDown(filename)
 
-      if filename in self.files:
-        del self.files[filename]
+      self._clearDown(filename)
+      if self._getCheckStatus(filename) == QtCore.Qt.Checked:
+        if self.files.get(filename, QtCore.Qt.Unchecked) == QtCore.Qt.Unchecked:
+          self._setStatusSideways(filename, QtCore.Qt.Checked)
+        self.files[filename] = QtCore.Qt.Unchecked
       else:
         self.files[filename] = QtCore.Qt.Checked
+      self._propagateUp(filename)
+
       self.emit(QtCore.SIGNAL("dataChanged(QModelIndex,QModelIndex)"), None, None)
 
       return True
     else:
       return QDirModel.setData(self, index, value, role)
 
-  def _getCheckStatusUp(self, filename):
-    dirname = os.path.dirname(filename)
-    if dirname == filename or not dirname:
-      return QtCore.Qt.Unchecked
-    else:
-      if dirname in self.files:
-        if self.files[dirname] == QtCore.Qt.Checked:
-          return QtCore.Qt.Checked
-    return self._getCheckStatusUp(dirname)
-
-  def _getCheckStatusDown(self, filename):
-    num_checked = 0
-    full_names = glob.glob(os.path.join(filename, '*'))
-    for full_name in full_names:
-      if full_name in self.files:
-        if self.files[full_name] == QtCore.Qt.Checked:
-          num_checked += 1
-        elif self.files[full_name] == QtCore.Qt.PartiallyChecked:
-          result = self._getCheckStatusDown(full_name)
-          if result == QtCore.Qt.PartiallyChecked:
-            return QtCore.Qt.PartiallyChecked
-          elif result == QtCore.Qt.Checked:
-            num_checked += 1
-
-    if num_checked == 0:
-      return QtCore.Qt.Unchecked
-    elif num_checked == len(full_names):
+  def _getCheckStatus(self, filename):
+    """Gets cumulative status of a node.
+    """
+    check_status = self.files.get(filename, QtCore.Qt.Unchecked)
+    if check_status == QtCore.Qt.Checked:
       return QtCore.Qt.Checked
+    elif check_status == QtCore.Qt.PartiallyChecked:
+      return QtCore.Qt.Unchecked
     else:
-      return QtCore.Qt.PartiallyChecked
+      dirname = os.path.dirname(filename)
+      if dirname and not dirname == filename:
+        return self._getCheckStatus(dirname)
+      else:
+        return QtCore.Qt.Unchecked
 
-  def _checkUp(self, filename):
+  def _setStatusSideways(self, filename, status):
+    """Check all files on the same hierarchy level.
+    """
+    full_names = glob.glob(os.path.join(os.path.dirname(filename), '*'))
+    for full_name in full_names:
+      self.files[full_name] = status
+
+  def _propagateUp(self, filename):
+    """Sets the status up the hierarchy.
+    """
     dirname = os.path.dirname(filename)
     if dirname == filename or not dirname:
       return
-    self.files[dirname] = QtCore.Qt.PartiallyChecked
-    self._checkUp(dirname)
+    full_names = glob.glob(os.path.join(dirname, '*'))
+
+    num_checked = 0
+    num_unchecked = 0
+    for full_name in full_names:
+      status = self.files.get(full_name, QtCore.Qt.Unchecked)
+      num_checked += 1 if status == QtCore.Qt.Checked else 0
+      num_unchecked += 1 if status == QtCore.Qt.Unchecked else 0
+    if num_checked == len(full_names):
+      self.files[dirname] = QtCore.Qt.Checked
+      self._setStatusSideways(filename, QtCore.Qt.Unchecked)
+    elif num_unchecked == len(full_names):
+      self.files[dirname] = QtCore.Qt.Unchecked
+    else:
+      self.files[dirname] = QtCore.Qt.PartiallyChecked
+
+    self._propagateUp(dirname)
 
   def _clearDown(self, filename):
+    """Clears check status for all elements down the hierarchy.
+    """
     if not filename in self.files or not os.path.isdir(filename):
       return
     full_names = glob.glob(os.path.join(filename, '*'))
@@ -125,6 +140,14 @@ class CheckableDirModel(QDirModel):
       if full_name in self.files:
         del self.files[full_name]
       self._clearDown(full_name)
+
+  def _addSelectedFiles(self, filename, selected_files):
+    if os.path.isdir(filename):
+      full_names = glob.glob(os.path.join(filename, '*'))
+      for full_name in full_names:
+        self._addSelectedFiles(full_name, selected_files)
+    else:
+      selected_files.add(filename)
 
 
 class FileSelectDialog(object):
@@ -144,7 +167,20 @@ class FileSelectDialog(object):
 
     self.model = CheckableDirModel()
     tree_view = self.dialog.findChild(QTreeView, 'listDirsFiles')
+    self.model.set_tree_view(tree_view)
     tree_view.setModel(self.model)
+    tree_view.setStyleSheet("""
+        QTreeView::indicator:unchecked { image: url('%s'); }
+        QTreeView::indicator:indeterminate { image: url('%s'); }
+        QTreeView::indicator:checked { image: url('%s'); }""" %
+            (UI_ICON_FILE_STEM % 'unchecked.png',
+             UI_ICON_FILE_STEM % 'intermediate.png',
+             UI_ICON_FILE_STEM % 'checked.png'))
+    header = tree_view.header()
+    header.setResizeMode(QHeaderView.Interactive)
+    header.resizeSection(0, 300)
+    header.resizeSection(1, 65)
+    header.resizeSection(2, 65)
 
     button_box = self.dialog.findChild(QDialogButtonBox, 'buttonBox')
     button_box.accepted.connect(self.accepted)
@@ -153,9 +189,11 @@ class FileSelectDialog(object):
   def accepted(self):
     self.model.get_selected_files(self.selected_files)
     self.dialog.destroy()
+    self.dialog = None
 
   def rejected(self):
     self.dialog.destroy()
+    self.dialog = None
 
   def show(self):
     self.dialog.show()
@@ -178,4 +216,10 @@ def _load_ui_type(filename):
     form_class = frame['Ui_%s'%form_class]
 
   return form_class
+
+def show_dialog():
+  global dialog
+  dialog = FileSelectDialog(set())
+  dialog.show()
+
 
