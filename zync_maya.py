@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.13'
+__version__ = '1.2.14'
 
 import copy
 import file_select_dialog
@@ -28,7 +28,6 @@ import string
 import sys
 import traceback
 import webbrowser
-from distutils.version import StrictVersion
 
 zync = None
 
@@ -2406,7 +2405,8 @@ def is_latest_version():
   global _VERSION_CHECK_RESULT
   if _VERSION_CHECK_RESULT is None:
     try:
-      _VERSION_CHECK_RESULT = _is_latest_version()
+      import_zync_python()
+      _VERSION_CHECK_RESULT = zync.is_latest_version([('zync_maya', __version__)])
     # if there's an exception during version check, print the exception but
     # assume user is up to date. we don't want to block them launching jobs.
     except:
@@ -2414,27 +2414,6 @@ def is_latest_version():
       print traceback.format_exc()
       return True
   return _VERSION_CHECK_RESULT
-
-
-def _is_latest_version():
-  print 'running Zync version check'
-  import_zync_python()
-  versions_to_check = (
-    (__version__, 'https://api.zyncrender.com/zync_maya/version'),
-    (zync.__version__, 'https://api.zyncrender.com/zync_python/version'),
-  )
-  http = zync.httplib2.Http()
-  for local_version, publish_url in versions_to_check:
-    print 'checking URL %s' % publish_url
-    print 'local version %s' % local_version
-    response, published_version = http.request(publish_url, 'GET')
-    print 'published version %s' % published_version
-    if StrictVersion(local_version) >= StrictVersion(published_version):
-      print 'up to date'
-    else:
-      print 'update is needed'
-      return False
-  return True
 
 
 def show_update_notification():
