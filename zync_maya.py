@@ -14,10 +14,9 @@ Usage:
 
 """
 
-__version__ = '1.2.14'
+__version__ = '1.2.15'
 
 import copy
-import file_select_dialog
 import functools
 import imp
 import math
@@ -28,6 +27,7 @@ import string
 import sys
 import traceback
 import webbrowser
+
 
 zync = None
 
@@ -1986,6 +1986,8 @@ class SubmitWindow(object):
 
   @show_exceptions
   def select_files(self):
+    import_zync_python()
+    import zync_lib.auxiliary_files.file_select_dialog as file_select_dialog
     self.file_select_dialog = file_select_dialog.FileSelectDialog(self.extra_assets)
     self.file_select_dialog.show()
 
