@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.15'
+__version__ = '1.2.16'
 
 import copy
 import functools
@@ -1516,7 +1516,7 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, label='Use Standalone')
-      self.chunk_size_allowed = False
+      self.chunk_size_allowed = self.experiment_swapless
     else:
       raise MayaZyncException('Unrecognized renderer "%s".' % renderer)
     cmds.checkBox('vray_nightly', e=True, v=False)
