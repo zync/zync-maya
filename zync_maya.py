@@ -14,11 +14,10 @@ Usage:
 
 """
 
-__version__ = '1.2.16'
+__version__ = '1.2.17'
 
 import copy
 import functools
-import imp
 import math
 import md5
 import os
@@ -1987,7 +1986,7 @@ class SubmitWindow(object):
   @show_exceptions
   def select_files(self):
     import_zync_python()
-    import zync_lib.auxiliary_files.file_select_dialog as file_select_dialog
+    import file_select_dialog
     self.file_select_dialog = file_select_dialog.FileSelectDialog(self.extra_assets)
     self.file_select_dialog.show()
 
