@@ -1095,7 +1095,7 @@
              <item>
               <widget class="QCheckBox" name="sync_extra_assets">
                <property name="text">
-                <string>Sync Extra Assets (experimental)</string>
+                <string>Select Extra Files</string>
                </property>
               </widget>
              </item>

@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.2.17'
+__version__ = '1.3'
 
 import copy
 import functools
@@ -1094,8 +1094,6 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
   print '--> files'
   scene_info['files'] = list(set(get_scene_files()))
   for full_name in extra_assets:
-    if os.path.isdir(full_name):
-      full_name = os.path.join(full_name, '*')
     scene_info['files'].append(full_name.replace('\\', '/'))
   # Xgen files are already included in the main files list, but we also
   # include them separately so Zync can perform Xgen-related tasks on
@@ -1338,8 +1336,6 @@ class SubmitWindow(object):
 
     self.init_layers()
     self.init_bake()
-
-    self.extra_assets = set()
 
     self.name = self.loadUI(UI_FILE)
 
@@ -1987,7 +1983,7 @@ class SubmitWindow(object):
   def select_files(self):
     import_zync_python()
     import file_select_dialog
-    self.file_select_dialog = file_select_dialog.FileSelectDialog(self.extra_assets)
+    self.file_select_dialog = file_select_dialog.FileSelectDialog(self.new_project_name)
     self.file_select_dialog.show()
 
   @show_exceptions
@@ -2001,7 +1997,10 @@ class SubmitWindow(object):
     params = self.get_render_params()
 
     if params['sync_extra_assets']:
-      if not self.extra_assets:
+      import_zync_python()
+      import file_select_dialog
+      extra_assets = file_select_dialog.FileSelectDialog.get_extra_assets(self.new_project_name)
+      if not extra_assets:
         raise MayaZyncException('No extra assets selected')
 
     confirm_mesage = 'Yes, submit job.'
@@ -2041,7 +2040,7 @@ class SubmitWindow(object):
       params['scene_info'] = get_scene_info(params['renderer'],
           (params['layers'].split(',') if params['layers'] else None),
           (eval_ui('job_type', ui_type='optionMenu', v=True).lower() == 'bake'),
-          self.extra_assets if params['sync_extra_assets'] else set())
+          extra_assets if params['sync_extra_assets'] else [])
     except ZyncAbortedByUser:
       # If the job is aborted just finish the submit function
       return
@@ -2391,7 +2390,6 @@ class SubmitWindow(object):
         return False
 
     return True
-
 
 @show_exceptions
 def submit_dialog():
