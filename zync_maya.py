@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.3'
+__version__ = '1.3.1'
 
 import copy
 import functools
@@ -477,7 +477,8 @@ def _aiStandIn_handler(node):
 
 def _aiImage_handler(node):
   """Handles aiImage nodes"""
-  yield cmds.getAttr('%s.filename' % node)
+  filename = cmds.getAttr('%s.filename' % node)
+  yield seq_to_glob(filename)
 
 
 def _aiPhotometricLight_handler(node):
