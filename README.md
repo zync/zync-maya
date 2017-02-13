@@ -1,6 +1,6 @@
 # Zync Plugin for Autodesk's Maya
 
-Tested with Maya 2014, 2015, and 2016.
+For a list of Maya versions supported on Zync please see [our main website](https://www.zyncrender.com/#about). You can find additional info in [our documentation](https://sites.google.com/site/zyncpublic/doc/faq#TOC-Q.-What-applications-renderers-plug-ins-do-you-support-).
 
 ## zync-python
 
