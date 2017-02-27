@@ -1,47 +1,75 @@
-#!/usr/bin/env python
-"""Test a Maya scene against the Zync Maya plugin.
+"""Zync Maya Unit Tests.
 
-Accepts a path to the Maya scene to test, and a JSON file containing expected scene
-information. The structure of the file must be:
-
-{
-  "params": {
-    "renderer": <str, renderer to use e.g. vray>,
-    "layers": <str, comma-separated list of render layers to be rendered>,
-    "scene_info": <dict, expected scene info>
-  }
-}
-
-The file can contain other information as well, which will be ignored.
+This script is not meant to be executed directly; it must be run via mayapy
+so the Maya Python environment is available to it.
 """
 
 import argparse
-import ast
 import json
-import logging
 import os
-import platform
-import pprint
-import subprocess
 import sys
-import tempfile
 import unittest
 
-
-class MayaFailedException(Exception):
-  pass
+import zync_maya
 
 
-def _get_maya_bin(maya_version):
-  """Gets Maya install location."""
-  # mac
-  if platform.system() == 'Darwin':
-    return '/Applications/Autodesk/maya%s/Maya.app/Contents/bin/maya' % maya_version
-  # linux. testing on windows not currently supported.
-  else:
-    if os.path.isdir('/usr/autodesk/mayaIO%s' % maya_version):
-      return '/usr/autodesk/mayaIO%s/bin/maya' % maya_version
-    return '/usr/autodesk/maya%s/bin/maya' % maya_version
+class TestMayaScene(unittest.TestCase):
+  """Scene-based tests, acting on an individual scene which must be provided."""
+
+  def __init__(self, testname, scene_file, info_file):
+    super(TestMayaScene, self).__init__(testname)
+    self.scene_file = scene_file
+    self.info_file = info_file
+    # The scene JSON objects can get quite large and if there is a diff found
+    # we want to display the whole thing for easier debugging.
+    self.maxDiff = None
+
+  def test_scene_info(self):
+    with open(self.info_file) as fp:
+      params = json.loads(fp.read())['params']
+    scene_info_master = _unicode_to_str(params['scene_info'])
+
+    # Would prefer not to import here, but you can't import maya.cmds before
+    # running maya.standalone.initialize() and there's no reason to add the
+    # Maya overhead for tests that aren't going to actually use maya.cmds.
+    import maya.standalone
+    maya.standalone.initialize()
+    import maya.cmds
+
+    # Assume the structure is <project folder>/scenes/<scene file>.
+    maya.cmds.workspace(directory=os.path.dirname(os.path.dirname(self.scene_file)))
+    maya.cmds.file(self.scene_file, force=True, open=True, ignoreVersion=True, prompt=False)
+    scene_info_from_scene = zync_maya.get_scene_info(
+        params['renderer'], params['layers'].split(','), False, [])
+
+    # Sort the file list from each set of scene info so we don't raise errors
+    # caused only by file lists being in different orders.
+    scene_info_from_scene['files'].sort()
+    scene_info_master['files'].sort()
+
+    # Be a bit less specific when checking renderer version.
+    if 'arnold_version' in scene_info_from_scene:
+      scene_info_from_scene['arnold_version'] = '.'.join(
+          scene_info_from_scene['arnold_version'].split('.')[:2])
+    if 'arnold_version' in scene_info_master:
+      scene_info_master['arnold_version'] = '.'.join(
+          scene_info_master['arnold_version'].split('.')[:2])
+
+    if 'renderman_version' in scene_info_from_scene:
+      scene_info_from_scene['renderman_version'] = (
+          scene_info_from_scene['renderman_version'].split('.')[0])
+    if 'renderman_version' in scene_info_master:
+      scene_info_master['renderman_version'] = (
+          scene_info_master['renderman_version'].split('.')[0])
+
+    self.assertEqual(scene_info_from_scene, scene_info_master)
+
+
+class TestMaya(unittest.TestCase):
+
+  # TODO(cipriano) Will replace this with a real test in a followup CL.
+  def test_placeholder(self):
+    self.assertEqual(1+1, 2)
 
 
 def _unicode_to_str(input_obj):
@@ -66,120 +94,27 @@ def _unicode_to_str(input_obj):
     return input_obj
 
 
-def run_maya_and_get_scene_info(scene, renderer, layers, maya_version):
-  # Write out a temporary MEL script which wraps the call to zync-maya.
-  # We could use mayapy instead but mayapy has proven unreliable in initializing
-  # its environment in the same way as standard maya.
-  with tempfile.NamedTemporaryFile() as mel_script:
-    # Maya produces a lot of output on startup that we don't have control over.
-    # This output goes to both stdout & stderr and can differ based on what
-    # plugins are installed and various other factors. In order to reliably
-    # capture only the scene_info, we write it out to another temp file.
-    scene_info_fd, scene_info_file = tempfile.mkstemp()
-    script_text = 'python("import zync_maya"); '
-    script_text += 'string $scene_info = python("zync_maya.get_scene_info('
-    # renderer
-    script_text += '\'%s\', ' % renderer
-    # list of layers being rendered. this comes in a comma-separated string
-    # already so no need to join
-    script_text += '[\'%s\'], ' % layers
-    # is_bake
-    script_text += 'False, [])"); '
-    script_text += 'string $output_file = "%s"; ' % scene_info_file
-    script_text += '$fp = `fopen $output_file "w"`; '
-    script_text += 'fprint $fp $scene_info; '
-    script_text += 'fclose $fp; '
-    mel_script.write(script_text)
-    mel_script.flush()
-
-    # Run Maya. This launches Maya, loads the scene file, runs our MEL wrapper
-    # script, and exits.
-    cmd = '%s -batch -script %s -file "%s"' % (_get_maya_bin(maya_version),
-                                               mel_script.name,
-                                               scene)
-    p = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-                         shell=True)
-    out, err = p.communicate()
-    if p.returncode:
-      raise MayaFailedException(('maya failed to run. rc: %d, stdout: %s, '
-                                 'stderr: %s') % (p.returncode, out, err))
-
-    # Read in the scene info from file and clean up.
-    with os.fdopen(scene_info_fd) as fp:
-      scene_info_raw = fp.read()
-    os.remove(scene_info_file)
-
-  try:
-    scene_info_from_scene = _unicode_to_str(ast.literal_eval(scene_info_raw))
-  except SyntaxError:
-    print 'SyntaxError parsing scene_info.'
-    print 'maya stdout: %s' % out
-    print 'maya stderr: %s' % err
-    raise
-
-  return scene_info_from_scene
-
-
-class TestMayaScene(unittest.TestCase):
-
-  def __init__(self, testname, scene_file, info_file, maya_version):
-    super(TestMayaScene, self).__init__(testname)
-    self.scene_file = scene_file
-    self.info_file = info_file
-    self.maya_version = maya_version
-    # test_scene_info compares dicts, setting maxDiff to None tells it
-    # to show the entire diff in case of a mismatch.
-    self.maxDiff = None
-
-  def test_scene_info(self):
-    with open(self.info_file) as fp:
-      params = json.loads(fp.read())['params']
-    scene_info_master = _unicode_to_str(params['scene_info'])
-
-    scene_info_from_scene = run_maya_and_get_scene_info(self.scene_file,
-        params['renderer'], params['layers'], self.maya_version)
-
-    # sort the file list from each set of scene info so we don't raise errors
-    # caused only by file lists being in different orders
-    scene_info_from_scene['files'].sort()
-    scene_info_master['files'].sort()
-
-    # be a bit less specific when checking renderer version
-
-    if 'arnold_version' in scene_info_from_scene:
-      scene_info_from_scene['arnold_version'] = '.'.join(scene_info_from_scene['arnold_version'].split('.')[:2])
-    if 'arnold_version' in scene_info_master:
-      scene_info_master['arnold_version'] = '.'.join(scene_info_master['arnold_version'].split('.')[:2])
-
-    if 'renderman_version' in scene_info_from_scene:
-      scene_info_from_scene['renderman_version'] = scene_info_from_scene['renderman_version'].split('.')[0]
-    if 'renderman_version' in scene_info_master:
-      scene_info_master['renderman_version'] = scene_info_master['renderman_version'].split('.')[0]
-
-    self.assertEqual(scene_info_from_scene, scene_info_master)
-
-
-def main():
-  logging.basicConfig(
-      level=logging.INFO,
-      format='%(asctime)s %(threadName)s %(module)s:%(lineno)d %(levelname)s %(message)s')
-
+if __name__ == '__main__':
   parser = argparse.ArgumentParser(description=__doc__,
       formatter_class=argparse.RawTextHelpFormatter)
-  parser.add_argument('--scene', required=True, help='Path to the Maya scene to test.')
-  parser.add_argument('--info-file', required=True, help=('Path to JSON file containing '
-                                                          'expected scene information.'))
-  parser.add_argument('--maya-version', required=True, help='Maya version number to test.')
+  parser.add_argument('--scene', help='Path to the Maya scene to test.')
+  parser.add_argument('--info-file', help=('Path to JSON file containing '
+                                           'expected scene information.'))
   args = parser.parse_args()
 
-  suite = unittest.TestSuite()
-  suite.addTest(TestMayaScene('test_scene_info', args.scene, args.info_file, args.maya_version))
+  if args.scene:
+    if not args.info_file:
+      print 'If you use --scene you must also use --info-file.'
+      sys.exit(1)
+    suite = unittest.TestSuite()
+    suite.addTest(TestMayaScene('test_scene_info', args.scene, args.info_file))
+  else:
+    suite = unittest.TestLoader().loadTestsFromTestCase(TestMaya)
   test_result = unittest.TextTestRunner().run(suite)
 
-  # since we're not using unittest.main, we need to manually provide an
-  # exit code or the script will report 0 even if the test failed.
-  sys.exit(not test_result.wasSuccessful())
-
-
-if __name__ == '__main__':
-  main()
+  # Since we're not using unittest.main, we need to manually provide an exit
+  # code or the script will report 0 even if the test failed. mayapy is buggy
+  # and its shutdown procedure will often cause stack traces and bad exit
+  # codes even when tests were successful. os._exit circumvents the normal
+  # shutdown process so we can focus on the actual test result.
+  os._exit(not test_result.wasSuccessful())
