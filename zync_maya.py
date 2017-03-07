@@ -14,12 +14,13 @@ Usage:
 
 """
 
-__version__ = '1.3.3'
+__version__ = '1.3.5'
 
+
+import base64
 import copy
 import functools
 import math
-import md5
 import os
 import re
 import string
@@ -160,17 +161,23 @@ def udim_range():
 
 
 def seq_to_glob(in_path):
-  """Takes an image sequence path and returns it in glob format,
-  with the frame number replaced by a '*'.
+  """Takes an image sequence path and returns it in glob format.
+
+  Any frame numbers or other tokens will be replaced by a '*'.
   Image sequences may be numerical sequences, e.g. /path/to/file.1001.exr
-  will return as /path/to/file.*.exr.
-  Image sequences may also use tokens to denote sequences, e.g.
-  /path/to/texture.<UDIM>.tif will return as /path/to/texture.*.tif.
+  will return as /path/to/file.*.exr. Image sequences may also use tokens to
+  denote sequences, e.g. /path/to/texture.<UDIM>.tif will return as
+  /path/to/texture.*.tif.
+
   Args:
     in_path: str, the image sequence path
+
+  Returns:
+    String, the new path, subbed with any needed wildcards.
   """
   if in_path is None:
     return in_path
+  in_path = _replace_attr_tokens(in_path)
   if '<udim>' in in_path.lower():
     return re.sub('<udim>', '*', in_path, flags=re.IGNORECASE)
   if '<tile>' in in_path.lower():
@@ -192,6 +199,17 @@ def seq_to_glob(in_path):
     return '%s/%s' % (head, new_base)
   else:
     return in_path
+
+
+def _replace_attr_tokens(path):
+  glob_path = re.sub(r'<attr:.*?>', '*', path, flags=re.IGNORECASE)
+  if not re.search(r'[^/*]', glob_path):
+    raise MayaZyncException(
+        'A file path using attr: tags resolved to %s, which is too wide. '
+        'Please use attr: tags only for portions of the file path to limit the '
+        'potential matches for these paths; this will help both Arnold and '
+        'Zync locate these files.' % glob_path)
+  return glob_path
 
 
 def get_file_node_path(node):
@@ -225,7 +243,7 @@ def node_uses_image_sequence(node):
   node_path = get_file_node_path(node).lower()
   return (cmds.getAttr('%s.useFrameExtension' % node) == True or
           '<udim>' in node_path or '<tile>' in node_path or '<uvtile>' in node_path or
-          'u<u>_v<v>' in node_path or '<frame0' in node_path)
+          'u<u>_v<v>' in node_path or '<frame0' in node_path or '<attr:' in node_path)
 
 
 def _get_layer_overrides(attr):
@@ -2325,7 +2343,7 @@ class SubmitWindow(object):
     render_params['output_filename'] = render_params['output_filename'].replace('\\', '/')
 
     ass_base, ext = os.path.splitext(ass_path)
-    layer_mangled = md5.new(layer).hexdigest()[:4]
+    layer_mangled = base64.b64encode(layer)[-4:]
     layer_file = '%s_%s_%s%s' % (ass_base, layer, layer_mangled, ext)
     layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
 

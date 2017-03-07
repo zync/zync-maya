@@ -39,8 +39,8 @@ class TestMayaScene(unittest.TestCase):
     # Assume the structure is <project folder>/scenes/<scene file>.
     maya.cmds.workspace(directory=os.path.dirname(os.path.dirname(self.scene_file)))
     maya.cmds.file(self.scene_file, force=True, open=True, ignoreVersion=True, prompt=False)
-    scene_info_from_scene = zync_maya.get_scene_info(
-        params['renderer'], params['layers'].split(','), False, [])
+    scene_info_from_scene = _unicode_to_str(zync_maya.get_scene_info(
+        params['renderer'], params['layers'].split(','), False, []))
 
     # Sort the file list from each set of scene info so we don't raise errors
     # caused only by file lists being in different orders.
@@ -67,9 +67,15 @@ class TestMayaScene(unittest.TestCase):
 
 class TestMaya(unittest.TestCase):
 
-  # TODO(cipriano) Will replace this with a real test in a followup CL.
-  def test_placeholder(self):
-    self.assertEqual(1+1, 2)
+  def test_replace_attr_tokens(self):
+    self.assertEqual(
+        zync_maya._replace_attr_tokens('/path/to/textures/<attr:path>/<attr:texture>'),
+        '/path/to/textures/*/*')
+    self.assertEqual(
+        zync_maya._replace_attr_tokens('/path/to/textures/texture01.jpg'),
+        '/path/to/textures/texture01.jpg')
+    with self.assertRaises(zync_maya.MayaZyncException) as _:
+      zync_maya._replace_attr_tokens('<attr:path>/<attr:texture>')
 
 
 def _unicode_to_str(input_obj):
