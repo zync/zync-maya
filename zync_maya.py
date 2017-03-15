@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.3.5'
+__version__ = '1.3.6'
 
 
 import base64
@@ -599,7 +599,7 @@ def _openVDBRead_handler(node):
 
 def _aiVolume_handler(node):
   """Handles aiVolume nodes, Arnold volume grid files."""
-  yield cmds.getAttr('%s.filename' % node)
+  yield seq_to_glob(cmds.getAttr('%s.filename' % node))
 
 
 def _mash_handler(node):
