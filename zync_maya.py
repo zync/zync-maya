@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.3.6'
+__version__ = '1.3.7'
 
 
 import base64
@@ -1694,7 +1694,7 @@ class SubmitWindow(object):
     params['priority'] = int(eval_ui('priority', text=True))
     params['num_instances'] = int(eval_ui('num_instances', text=True))
 
-    selected_type = self._get_machine_type_from_label(
+    selected_type = self.zync_conn.machine_type_from_label(
         eval_ui('instance_type', 'optionMenu', v=True), params['renderer'])
     if not selected_type:
       raise MayaZyncException('Unknown instance type selected: %s' % selected_type)
@@ -1795,11 +1795,8 @@ class SubmitWindow(object):
     if old_types is not None:
       cmds.deleteUI(old_types)
     current_renderer = self.get_renderer()
-    sorted_types = [t for t in self.zync_conn.INSTANCE_TYPES]
-    sorted_types.sort(self.zync_conn.compare_instance_types)
     set_to = None
-    for inst_type in sorted_types:
-      label = self._machine_type_to_label(inst_type, current_renderer)
+    for label in self.zync_conn.get_machine_type_labels(current_renderer):
       if label == old_selection:
         set_to = label
       cmds.menuItem(parent='instance_type', label=label)
@@ -1870,10 +1867,10 @@ class SubmitWindow(object):
 
   def update_est_cost(self):
     renderer = self.get_renderer()
-    machine_type = self._get_machine_type_from_label(
+    machine_type = self.zync_conn.machine_type_from_label(
         eval_ui('instance_type', ui_type='optionMenu', v=True), renderer)
     if machine_type and renderer:
-      machine_type_price = self._get_machine_type_price(machine_type, renderer)
+      machine_type_price = self.zync_conn.get_machine_type_price(machine_type, renderer)
       if machine_type_price:
         num_machines = int(eval_ui('num_instances', text=True))
         text = '$%.02f' % (num_machines * machine_type_price)
@@ -1882,68 +1879,6 @@ class SubmitWindow(object):
     else:
       text = 'Not Available'
     cmds.text('est_cost', e=True, label='Est. Cost per Hour: %s' % text)
-
-  def _machine_type_to_label(self, machine_type, renderer):
-    """Gets the user-visible label for a given machine type.
-
-    Args:
-      machine_type: str, machine type name
-      renderer: str, renderer
-
-    Returns:
-      str, user-visible label
-    """
-    type_properties = self.zync_conn.INSTANCE_TYPES.get(machine_type)
-    if not type_properties:
-      return machine_type
-    label = '%s (%s)' % (machine_type, type_properties.get('description', '').replace(', preemptible',''))
-    if renderer:
-      machine_type_price = self._get_machine_type_price(machine_type, renderer)
-      if machine_type_price:
-        label += ' $%.02f' % machine_type_price
-    return label
-
-  def _get_machine_type_price(self, machine_type, renderer):
-    """Gets pricing for the given machine type.
-
-    Args:
-      machine_type: str, machine type name
-      renderer: str, renderer
-
-    Returns:
-      float, pricing for machine type + renderer combination, or
-      None if pricing is unknown
-    """
-    machine_type_base = machine_type.split(' ')[-1]
-    field_name = 'CP-ZYNC-%s-%s' % (machine_type_base.upper(), renderer.upper())
-    if 'PREEMPTIBLE' in machine_type.upper():
-      field_name += '-PREEMPTIBLE'
-    if (field_name in self.zync_conn.PRICING['gcp_price_list'] and
-      'us' in self.zync_conn.PRICING['gcp_price_list'][field_name]):
-      return float(self.zync_conn.PRICING['gcp_price_list'][field_name]['us'])
-    return None
-
-  def _get_machine_type_from_label(self, instance_label, renderer):
-    """Given an item from the Maya instance_type dropdown menu, returns the
-    machine type for that label.
-
-    Example:
-      'zync-64vcpu-128gb (64 core, 176 GCEUs, 128GB RAM) $4.21' returns
-          'zync-64vcpu-128gb'
-      '(PREEMPTIBLE) zync-64vcpu-128gb (64 core, 176 GCEUs, 128GB RAM) $4.21' returns
-          '(PREEMPTIBLE) zync-64vcpu-128gb'
-
-    Args:
-      instance_label: str, the menu item label
-
-    Returns;
-      str, the machine type name, or None if label was empty
-    """
-    for machine_type in self.zync_conn.INSTANCE_TYPES:
-      current_label = self._machine_type_to_label(machine_type, renderer)
-      if current_label == instance_label:
-        return machine_type
-    return None
 
   def get_renderer(self):
     """Get the renderer which is currently selected in the Zync plugin.
