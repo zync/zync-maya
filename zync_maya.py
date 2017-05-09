@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.3.8'
+__version__ = '1.3.10'
 
 
 import base64
@@ -178,6 +178,7 @@ def seq_to_glob(in_path):
   if in_path is None:
     return in_path
   in_path = _replace_attr_tokens(in_path)
+  in_path = re.sub('<meshitem>', '*', in_path, flags=re.IGNORECASE)
   if '<udim>' in in_path.lower():
     return re.sub('<udim>', '*', in_path, flags=re.IGNORECASE)
   if '<tile>' in in_path.lower():
@@ -519,7 +520,24 @@ def _vrayVolumeGrid_handler(node):
 
 
 def _vrayScene_handler(node):
-  yield cmds.getAttr('%s.fPath' % node)
+  vrscene_path = cmds.getAttr('%s.fPath' % node)
+  yield vrscene_path
+  # Scan the .vrscene file for dependencies buried within.
+  # If the file does not exist we skip the scan but still report the main
+  # .vrscene file dependency to Zync, this is to allow Zync's default
+  # missing file detection to kick in when the job runs.
+  if os.path.exists(vrscene_path):
+    with open(vrscene_path) as fp:
+      for vrscene_line in fp:
+        # Files in the .vrscene are attached to nodes like this:
+        # BitmapBuffer bitmapBuffer_1 {
+        #   file="/path/to/file.exr";
+        vrscene_line = vrscene_line.strip()
+        if vrscene_line.startswith('file='):
+          file_path = '='.join(vrscene_line.split('=')[1:])
+          file_path = file_path.strip(';')
+          file_path = file_path.strip('\'"')
+          yield file_path
 
 
 def _ribArchive_handler(node):
@@ -574,6 +592,7 @@ def _pxrTexture_handler(node):
   else:
     yield re.sub('_MAPID_', '*', filename)
 
+
 def _pxrMultiTexture_handler(node):
   """Handles PxrMultiTexture nodes"""
   for texture_id in range(0,10):
@@ -581,11 +600,13 @@ def _pxrMultiTexture_handler(node):
     if filename:
       yield filename
 
+
 def _pxrDomeLight_handler(node):
   """Handles PxrDomeLight nodes"""
   filename = cmds.getAttr('%s.lightColorMap' % node)
   if filename:
     yield filename
+
 
 def _rmsEnvLight_handler(node):
   """Handles RMSEnvLight nodes"""
