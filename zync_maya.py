@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.3.10'
+__version__ = '1.3.11'
 
 
 import base64
@@ -638,6 +638,10 @@ def _pxrNormalMap_handler(node):
   yield cmds.getAttr('%s.filename' % node)
 
 
+def _mashAudio_handler(node):
+  yield cmds.getAttr('%s.filename' % node)
+
+
 def get_scene_files():
   """Returns all of the files being used by the scene"""
   file_types = {
@@ -678,6 +682,7 @@ def get_scene_files():
     'MASH_Waiter': _mash_handler,
     'PxrPtexture': _pxrPtexture_handler,
     'PxrNormalMap': _pxrNormalMap_handler,
+    'MASH_Audio': _mashAudio_handler,
   }
 
   for file_type in file_types:
@@ -2365,6 +2370,7 @@ class SubmitWindow(object):
         return False
 
     return True
+
 
 @show_exceptions
 def submit_dialog():
