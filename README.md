@@ -10,7 +10,7 @@ Before trying to install zync-maya, make sure to [download zync-python](https://
 
 # Warning
 
-Note that the simplest and recommended way to install Zync plugins is through the Zync Plugin Installer (see [instructions](https://sites.google.com/site/zyncpublic/doc/install#plugins)). The steps described below are for advanced users and we recommend to proceed with them only if you need to modify the plugin code for your custom needs.
+Note that the simplest and recommended way to install Zync plugins is through the  Zync Client Application  (see [instructions](https://sites.google.com/site/zyncpublic/doc/install#plugins)). The steps described below are for advanced users and we recommend to proceed with them only if you need to modify the plugin code for your custom needs.
 
 ## Clone the Repository
 
@@ -18,36 +18,29 @@ Clone this repository to the desired location on your local system. If you're do
 
 ## Config File
 
-Contained in this folder you'll find a file called ```config_maya.py.example```. Make a copy of this file in the same directory, and rename it ```config_maya.py```.
+Contained in `scripts/` you'll find a file called ```config_maya.py.example```. Make a copy of this file in the same directory, and rename it ```config_maya.py```.
 
 Edit ```config_maya.py``` in a Text Editor. It defines one config variable - `API_DIR` - the full path to your zync-python directory.
 
 Set `API_DIR` to point to the zync-python you installed earlier, save the file, and close it.
 
-## Maya.env
+## zync.mod
 
 Now you'll need to point Maya to this folder to load it on startup.
 
-The easiest way to do this is to create a Maya.env file and point it to this folder. See included Maya.env.example for an example of how to do this.
-
-Your Maya.env will need to set the following two variables:
+Create a file named `zync.mod` with the following contents:
 
 ```
-PYTHONPATH = Z:/path/to/plugins/zync-maya
-XBMLANGPATH = Z:/path/to/plugins/zync-maya
++ zync 1.0 Z:/path/to/plugins/zync-maya
 ```
 
-Be careful; if Maya.env already exists it may be setting these variables already. If you see them elsewhere in the file, you'll need to append your path to the existing setting. For example:
+This file can be placed anywhere within Maya's module search path. The module search path is defined by the `MAYA_MODULE_PATH` environment settings, as described in [the Maya docs](https://knowledge.autodesk.com/support/maya/learn-explore/caas/CloudHelp/cloudhelp/2016/ENU/Maya/files/GUID-228CCA33-4AFE-4380-8C3D-18D23F7EAC72-htm.html).
 
-PYTHONPATH = C:/my/scripts/folder;Z:/path/to/plugins/zync-maya
-
-To separate paths, use a semicolon (;) on Windows and a colon (:) on Linux and Mac OS X.
-
-**Linux Only** - XBMLANGPATH must end with "%B" to work:
+You can view your `MAYA_MODULE_PATH` setting by running the following in the Maya Script Editor:
 
 ```
-PYTHONPATH = /usr/local/zync/plugins/zync-maya
-XBMLANGPATH = /usr/local/zync/plugins/zync-maya/%B
+getenv MAYA_MODULE_PATH
 ```
 
-For more information on setting up a Maya.env file, see the page "Setting environment variables using Maya.env" in the Maya Help Docs.
+Once `zync.mod` is in place, restart Maya. You should now see a "Zync" shelf with the Zync icon present.
+
