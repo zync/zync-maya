@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.12'
+__version__ = '1.4.13'
 
 
 import base64
@@ -962,8 +962,12 @@ def get_maya_version():
   # maya versions in one integer, e.g. 201515. Divide by 100 to
   # find the major version.
   version_full = maya.mel.eval('about -api') / 100.0
-  # round down to the nearest .5
-  version_rounded = math.floor(version_full * 2) / 2
+  # Maya 2016 rounds down to the nearest .5
+  if int(version_full) == 2016:
+    version_rounded = math.floor(version_full * 2) / 2
+  # Other versions round down to the nearest whole version.
+  else:
+    version_rounded = math.floor(version_full)
   # if it's a whole number e.g. 2016.0, drop the decimal
   if version_rounded.is_integer():
     version_rounded = int(version_rounded)
