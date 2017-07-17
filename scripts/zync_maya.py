@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.13'
+__version__ = '1.4.14'
 
 
 import base64
@@ -30,6 +30,13 @@ import webbrowser
 
 
 zync = None
+
+
+VRAY_ENGINE_NAME_CPU = 'cpu'  # 0
+VRAY_ENGINE_NAME_OPENCL = 'opencl'  # 1
+VRAY_ENGINE_NAME_CUDA = 'cuda'  # 2
+VRAY_ENGINE_NAME_UNKNOWN = 'unknown'
+RENDER_LABEL_VRAY_CUDA = 'V-Ray (CUDA)'
 
 
 def show_exceptions(func):
@@ -1187,6 +1194,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
     print '--> vray version'
     try:
       scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
+      scene_info['vray_production_engine_name'] = _get_vray_production_engine_name()
     except Exception as e:
       raise MayaZyncException('Could not detect Vray version. This is required '
                               'to render Vray jobs. Do you have the Vray '
@@ -1305,6 +1313,25 @@ def _get_bake_set_output_path(bake_set):
   return full_path
 
 
+def _get_vray_production_engine_name():
+  """Get the vray production engine if the renderer is set to vray.
+
+  Return:
+    str, see VRAY_ENGINE_NAME_xxx constants for possible values
+  """
+  try:
+    engine_id = cmds.getAttr('vraySettings.productionEngine')
+    if engine_id == 0:
+      return VRAY_ENGINE_NAME_CPU
+    elif engine_id == 1:
+      return VRAY_ENGINE_NAME_OPENCL
+    elif engine_id == 2:
+      return VRAY_ENGINE_NAME_CUDA
+    return VRAY_ENGINE_NAME_UNKNOWN
+  except ValueError:
+    return VRAY_ENGINE_NAME_CPU
+
+
 def _unused(*args):
   """Method to mark a variable as unused.
 
@@ -1346,8 +1373,7 @@ class SubmitWindow(object):
     # will be authenticated
     self.zync_conn = zync.Zync(application='maya')
 
-    # TODO(maciek): cleanup after the experiment is done (b/28901835)
-    self.experiment_swapless = self.zync_conn.is_experiment_enabled('EXPERIMENT_SWAPLESS')
+    self.experiment_gpu = self.zync_conn.is_experiment_enabled('EXPERIMENT_GPU')
 
     self.new_project_name = self.zync_conn.get_project_name(scene_name)
 
@@ -1372,7 +1398,6 @@ class SubmitWindow(object):
     self.distributed = 0
     self.ignore_plugin_errors = 0
     self.login_type = 'zync'
-    self.chunk_size_allowed = True
 
     mi_setting = self.zync_conn.CONFIG.get('USE_MI')
     if mi_setting in (None, '', 1, '1'):
@@ -1383,6 +1408,7 @@ class SubmitWindow(object):
     self.x_res = cmds.getAttr('defaultResolution.width')
     self.y_res = cmds.getAttr('defaultResolution.height')
 
+    self.parse_renderer_from_scene()
     self.init_layers()
     self.init_bake()
 
@@ -1449,8 +1475,7 @@ class SubmitWindow(object):
     # we force standalone use.
     cmds.checkBox('use_standalone', e=True, changeCommand=self.change_standalone,
                   vis=self.is_maya_io)
-    if not self.experiment_swapless:
-      cmds.control('extra_assets_frame', e=True, visible=False)
+    cmds.control('extra_assets_frame', e=True, visible=False)
 
     #
     #  Call a few of those callbacks now to set initial UI state.
@@ -1544,7 +1569,6 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
-      self.chunk_size_allowed = True
     elif renderer.lower() == 'arnold':
       renderer_key = 'arnold'
       cmds.checkBox('vray_nightly', e=True, en=False)
@@ -1552,7 +1576,6 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
-      self.chunk_size_allowed = True
     elif renderer.lower() == 'renderman':
       renderer_key = 'renderman'
       cmds.checkBox('vray_nightly', e=True, en=False)
@@ -1560,17 +1583,15 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, label='Use Standalone')
-      self.chunk_size_allowed = self.experiment_swapless
     else:
       raise MayaZyncException('Unrecognized renderer "%s".' % renderer)
     cmds.checkBox('vray_nightly', e=True, v=False)
     cmds.checkBox('distributed', e=True, v=False)
-    cmds.textField('chunk_size', e=True, en=self.chunk_size_allowed)
-    cmds.textField('chunk_size', e=True, tx=('10' if self.chunk_size_allowed else '1'))
-    #
+    cmds.textField('chunk_size', e=True, en=True)
+    cmds.textField('chunk_size', e=True, tx='10')
+
     #  job_types dropdown - remove all items for list, then allow in job types
     #  from self.zync_conn.JOB_SUBTYPES
-    #
     old_types = cmds.optionMenu('job_type', q=True, ill=True)
     if old_types != None:
       cmds.deleteUI(old_types)
@@ -1654,7 +1675,7 @@ class SubmitWindow(object):
     if current_renderer == 'arnold' and checked:
       cmds.textField('chunk_size', e=True, en=False)
     else:
-      cmds.textField('chunk_size', e=True, en=self.chunk_size_allowed)
+      cmds.textField('chunk_size', e=True, en=True)
 
   @show_exceptions
   def select_new_project(self, selected):
@@ -1826,6 +1847,8 @@ class SubmitWindow(object):
       cmds.deleteUI(old_types)
     current_renderer = self.get_renderer()
     set_to = None
+
+    self.refresh_instance_types_cache()
     for label in self.zync_conn.get_machine_type_labels(current_renderer):
       if label == old_selection:
         set_to = label
@@ -1834,11 +1857,16 @@ class SubmitWindow(object):
       cmds.optionMenu('instance_type', e=True, v=set_to)
     self.update_est_cost()
 
-  def init_renderer(self):
-    #
-    #  Try to detect the currently selected renderer, so it will be selected
-    #  when the form appears. If we can't, fall back to the default set in zync.py.
-    #
+  def refresh_instance_types_cache(self):
+    if self.renderer == 'vray' and self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
+      usage_tag = 'maya_vray_rt'
+    else:
+      usage_tag = 'maya'
+    self.zync_conn.refresh_instance_types_cache(renderer=self.renderer, usage_tag=usage_tag)
+
+  def parse_renderer_from_scene(self):
+    # Try to detect the currently selected renderer, so it will be selected
+    # when the form appears. If we can't, fall back to the default set in zync.py.
     current_renderer = cmds.getAttr('defaultRenderGlobals.currentRenderer')
     if current_renderer == 'mentalRay':
       key = 'mr'
@@ -1852,18 +1880,27 @@ class SubmitWindow(object):
     else:
       key = 'vray'
     # if that renderer is not supported, default to Vray
-    default_renderer_name = self.zync_conn.MAYA_RENDERERS.get(key, 'vray')
     self.renderer = key
-    #
+
+    # read vray production engine
+    if key == 'vray':
+      self.vray_production_engine_name = _get_vray_production_engine_name()
+
+  def init_renderer(self):
     #  Add the list of renderers to UI element.
-    #
     rend_found = False
-    for item in self.zync_conn.MAYA_RENDERERS.values():
-      cmds.menuItem(parent='renderer', label=item)
-      if item == default_renderer_name:
-        rend_found = True
-    if rend_found:
-      cmds.optionMenu('renderer', e=True, v=default_renderer_name)
+    default_renderer_name = self.zync_conn.MAYA_RENDERERS.get(self.renderer, 'vray')
+
+    if self.experiment_gpu and self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
+      cmds.menuItem(parent='renderer', label=RENDER_LABEL_VRAY_CUDA)
+      cmds.optionMenu('renderer', e=True, v=RENDER_LABEL_VRAY_CUDA, enable=False)
+    else:
+      for item in self.zync_conn.MAYA_RENDERERS.values():
+        cmds.menuItem(parent='renderer', label=item)
+        if item == default_renderer_name:
+          rend_found = True
+      if rend_found:
+        cmds.optionMenu('renderer', e=True, v=default_renderer_name)
 
   def init_job_type(self):
     self.job_types = self.zync_conn.JOB_SUBTYPES['maya']
@@ -1924,6 +1961,8 @@ class SubmitWindow(object):
     for renderer, renderer_label in self.zync_conn.MAYA_RENDERERS.iteritems():
       if renderer_label == selected_renderer_label:
         return renderer
+    if selected_renderer_label == RENDER_LABEL_VRAY_CUDA:
+      return 'vray'
     return None
 
   def set_user_label(self, username):
@@ -2047,6 +2086,8 @@ class SubmitWindow(object):
         if params['renderer'] == 'vray':
           print 'Vray job, collecting additional info...'
 
+          self.verify_vray_production_engine()
+
           vrscene_path = self.get_standalone_scene_path('vrscene')
 
           print 'Exporting .vrscene files...'
@@ -2130,6 +2171,18 @@ class SubmitWindow(object):
 
     else:
       print 'Done.'
+
+  def verify_vray_production_engine(self):
+    supported = 'CPU or CUDA' if self.experiment_gpu else 'CPU'
+    if self.vray_production_engine_name == VRAY_ENGINE_NAME_OPENCL:
+      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
+                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
+    if not self.experiment_gpu and self.vray_production_engine_name != VRAY_ENGINE_NAME_CPU:
+      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
+                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
+    if self.experiment_gpu and self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
+      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
+                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
 
   @staticmethod
   def export_vrscene(vrscene_path, layer, params, start_frame, end_frame):
