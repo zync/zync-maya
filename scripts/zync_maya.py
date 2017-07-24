@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.14'
+__version__ = '1.4.17'
 
 
 import base64
@@ -98,7 +98,9 @@ _XGEN_FILE_ATTRS = [
   'cacheFileName',
 ]
 
+
 _XGEN_IMPORT_ERROR = None
+_RENDERSETUP_IMPORT_ERROR = None
 
 import maya.cmds as cmds
 import maya.mel
@@ -111,6 +113,12 @@ try:
 except ImportError as e:
   _XGEN_IMPORT_ERROR = str(e)
   print 'Error loading Xgen API: %s' % _XGEN_IMPORT_ERROR
+# Only newer versions of Maya have the Render Setup API.
+try:
+  import maya.app.renderSetup.model.renderSetup as renderSetup
+except (ImportError, RuntimeError) as e:
+  _RENDERSETUP_IMPORT_ERROR = str(e)
+  print 'Error loading Render Setup API: %s' % _RENDERSETUP_IMPORT_ERROR
 
 
 def eval_ui(path, ui_type='textField', **kwargs):
@@ -919,7 +927,7 @@ def get_default_extension(renderer):
 LAYER_INFO = {}
 def collect_layer_info(layer, renderer):
   cur_layer = cmds.editRenderLayerGlobals(q=True, currentRenderLayer=True)
-  cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+  _switch_to_renderlayer(layer)
 
   layer_info = {}
 
@@ -947,7 +955,7 @@ def collect_layer_info(layer, renderer):
   except Exception:
     layer_info['prefix'] = ''
 
-  cmds.editRenderLayerGlobals(currentRenderLayer=cur_layer)
+  _switch_to_renderlayer(cur_layer)
   return layer_info
 
 
@@ -969,6 +977,9 @@ def get_maya_version():
   # maya versions in one integer, e.g. 201515. Divide by 100 to
   # find the major version.
   version_full = maya.mel.eval('about -api') / 100.0
+  # Maya 2018 added two additional digits to the API version.
+  if float(version_full) >= 201800:
+    version_full /= 100.0
   # Maya 2016 rounds down to the nearest .5
   if int(version_full) == 2016:
     version_rounded = math.floor(version_full * 2) / 2
@@ -1330,6 +1341,26 @@ def _get_vray_production_engine_name():
     return VRAY_ENGINE_NAME_UNKNOWN
   except ValueError:
     return VRAY_ENGINE_NAME_CPU
+
+
+def _switch_to_renderlayer(layer_name):
+  # Use the newer Render Setup API if it exists and Render Setup is enabled.
+  if (_RENDERSETUP_IMPORT_ERROR is None and
+      cmds.optionVar(exists='renderSetupEnable') and
+      cmds.optionVar(query='renderSetupEnable')):
+    rs = renderSetup.instance()
+    # defaultRenderLayer doesn't exist as a Render Setup layer, it must be
+    # treated as a legacy layer always.
+    if layer_name == 'defaultRenderLayer':
+      rs.switchToLayerUsingLegacyName('defaultRenderLayer')
+    else:
+      # The rest of the zync-maya code works with legacy render layer names,
+      # which prefix Render Setup layers with an rs_ prefix.
+      if layer_name.startswith('rs_'):
+        layer_name = layer_name[3:]
+      rs.switchToLayer(rs.getRenderLayer(layer_name))
+  else:
+    cmds.editRenderLayerGlobals(currentRenderLayer=layer_name)
 
 
 def _unused(*args):
@@ -2205,7 +2236,7 @@ class SubmitWindow(object):
     """
     cmds.undoInfo(openChunk=True)
 
-    cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+    _switch_to_renderlayer(layer)
 
     scene_path = cmds.file(q=True, loc=True)
     scene_head, extension = os.path.splitext(scene_path)
@@ -2325,7 +2356,7 @@ class SubmitWindow(object):
     """
     cmds.undoInfo(openChunk=True)
 
-    cmds.editRenderLayerGlobals(currentRenderLayer=layer)
+    _switch_to_renderlayer(layer)
 
     scene_path = cmds.file(q=True, loc=True)
     scene_head, extension = os.path.splitext(scene_path)
