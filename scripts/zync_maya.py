@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.17'
+__version__ = '1.4.18'
 
 
 import base64
@@ -1506,7 +1506,6 @@ class SubmitWindow(object):
     # we force standalone use.
     cmds.checkBox('use_standalone', e=True, changeCommand=self.change_standalone,
                   vis=self.is_maya_io)
-    cmds.control('extra_assets_frame', e=True, visible=False)
 
     #
     #  Call a few of those callbacks now to set initial UI state.
