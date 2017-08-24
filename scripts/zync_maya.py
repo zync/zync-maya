@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.18'
+__version__ = '1.4.20'
 
 
 import base64
@@ -1347,7 +1347,8 @@ def _switch_to_renderlayer(layer_name):
   # Use the newer Render Setup API if it exists and Render Setup is enabled.
   if (_RENDERSETUP_IMPORT_ERROR is None and
       cmds.optionVar(exists='renderSetupEnable') and
-      cmds.optionVar(query='renderSetupEnable')):
+      cmds.optionVar(query='renderSetupEnable') and
+      not os.getenv('MAYA_ENABLE_LEGACY_RENDER_LAYERS')):
     rs = renderSetup.instance()
     # defaultRenderLayer doesn't exist as a Render Setup layer, it must be
     # treated as a legacy layer always.
@@ -1405,6 +1406,7 @@ class SubmitWindow(object):
     self.zync_conn = zync.Zync(application='maya')
 
     self.experiment_gpu = self.zync_conn.is_experiment_enabled('EXPERIMENT_GPU')
+    self.vray_production_engine_name = VRAY_ENGINE_NAME_UNKNOWN
 
     self.new_project_name = self.zync_conn.get_project_name(scene_name)
 
