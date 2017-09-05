@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.20'
+__version__ = '1.4.21'
 
 
 import base64
@@ -218,6 +218,8 @@ def seq_to_glob(in_path):
 
 
 def _replace_attr_tokens(path):
+  if not path:
+    return path
   glob_path = re.sub(r'<attr:.*?>', '*', path, flags=re.IGNORECASE)
   if not re.search(r'[^/*]', glob_path):
     raise MayaZyncException(
