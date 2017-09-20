@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.21'
+__version__ = '1.4.22'
 
 
 import base64

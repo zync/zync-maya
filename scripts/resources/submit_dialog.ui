@@ -705,7 +705,10 @@
                </size>
               </property>
               <property name="text">
-               <string>Skip File Check</string>
+               <string>Skip File Sync</string>
+              </property>
+              <property name="toolTip">
+               <string>If selected Zync sill skip file syncing phase. Beware, it may result in outdated scene and/or missing dependencies during the rendering.</string>
               </property>
               <property name="-v" stdset="0">
                <string>`python &quot;cmds.submit_callb('skip_check')&quot;`</string>
