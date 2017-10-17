@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.24'
+__version__ = '1.4.25'
 
 
 import base64
@@ -1892,10 +1892,8 @@ class SubmitWindow(object):
     self.update_est_cost()
 
   def refresh_instance_types_cache(self):
-    if self.renderer == 'vray' and self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
-      usage_tag = 'maya_vray_rt'
-    else:
-      usage_tag = 'maya'
+    usage_tag = 'maya_vray_rt' if self.renderer == 'vray' and \
+        self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA else None
     self.zync_conn.refresh_instance_types_cache(renderer=self.renderer, usage_tag=usage_tag)
 
   def parse_renderer_from_scene(self):
