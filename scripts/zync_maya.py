@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.25'
+__version__ = '1.4.27'
 
 
 import base64
@@ -1407,7 +1407,6 @@ class SubmitWindow(object):
     # will be authenticated
     self.zync_conn = zync.Zync(application='maya')
 
-    self.experiment_gpu = self.zync_conn.is_experiment_enabled('EXPERIMENT_GPU')
     self.vray_production_engine_name = VRAY_ENGINE_NAME_UNKNOWN
 
     self.new_project_name = self.zync_conn.get_project_name(scene_name)
@@ -1780,7 +1779,7 @@ class SubmitWindow(object):
     params['num_instances'] = int(eval_ui('num_instances', text=True))
 
     selected_type = self.zync_conn.machine_type_from_label(
-        eval_ui('instance_type', 'optionMenu', v=True), params['renderer'])
+        eval_ui('instance_type', 'optionMenu', v=True), params['renderer'] + '-maya')
     if not selected_type:
       raise MayaZyncException('Unknown instance type selected: %s' % selected_type)
     params['instance_type'] = selected_type
@@ -1923,7 +1922,7 @@ class SubmitWindow(object):
     rend_found = False
     default_renderer_name = self.zync_conn.MAYA_RENDERERS.get(self.renderer, 'vray')
 
-    if self.experiment_gpu and self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
+    if self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
       cmds.menuItem(parent='renderer', label=RENDER_LABEL_VRAY_CUDA)
       cmds.optionMenu('renderer', e=True, v=RENDER_LABEL_VRAY_CUDA, enable=False)
     else:
@@ -1965,7 +1964,7 @@ class SubmitWindow(object):
     cmds.textField('output_dir', e=True, tx=default_output_dir)
 
   def update_est_cost(self):
-    renderer = self.get_renderer()
+    renderer = '%s-maya' % self.get_renderer()
     machine_type = self.zync_conn.machine_type_from_label(
         eval_ui('instance_type', ui_type='optionMenu', v=True), renderer)
     if machine_type and renderer:
@@ -2232,16 +2231,9 @@ class SubmitWindow(object):
       print 'Done.'
 
   def verify_vray_production_engine(self):
-    supported = 'CPU or CUDA' if self.experiment_gpu else 'CPU'
-    if self.vray_production_engine_name == VRAY_ENGINE_NAME_OPENCL:
+    if self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
       raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
-                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
-    if not self.experiment_gpu and self.vray_production_engine_name != VRAY_ENGINE_NAME_CPU:
-      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
-                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
-    if self.experiment_gpu and self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
-      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
-                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
+                              'Please go to Render Settings -> VRay tab to change it to CPU or CUDA')
 
   @staticmethod
   def export_vrscene(vrscene_path, layer, params, start_frame, end_frame):
