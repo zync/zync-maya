@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.27'
+__version__ = '1.4.29'
 
 
 import base64
@@ -26,6 +26,7 @@ import re
 import string
 import sys
 import traceback
+import types
 import webbrowser
 
 
@@ -1366,6 +1367,20 @@ def _switch_to_renderlayer(layer_name):
     cmds.editRenderLayerGlobals(currentRenderLayer=layer_name)
 
 
+def _maya_attr_is_true(attr_val):
+  """Whether a Maya attr evaluates to True.
+
+  When querying an attribute value from an ambiguous object the Maya API will return
+  a list of values, which need to be properly handled to evaluate properly.
+  """
+  if isinstance(attr_val, types.BooleanType):
+    return attr_val
+  elif isinstance(attr_val, (types.ListType, types.GeneratorType)):
+    return any(attr_val)
+  else:
+    return bool(attr_val)
+
+
 def _unused(*args):
   """Method to mark a variable as unused.
 
@@ -1407,6 +1422,7 @@ class SubmitWindow(object):
     # will be authenticated
     self.zync_conn = zync.Zync(application='maya')
 
+    self.experiment_gpu = self.zync_conn.is_experiment_enabled('EXPERIMENT_GPU')
     self.vray_production_engine_name = VRAY_ENGINE_NAME_UNKNOWN
 
     self.new_project_name = self.zync_conn.get_project_name(scene_name)
@@ -1922,7 +1938,7 @@ class SubmitWindow(object):
     rend_found = False
     default_renderer_name = self.zync_conn.MAYA_RENDERERS.get(self.renderer, 'vray')
 
-    if self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
+    if self.experiment_gpu and self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
       cmds.menuItem(parent='renderer', label=RENDER_LABEL_VRAY_CUDA)
       cmds.optionMenu('renderer', e=True, v=RENDER_LABEL_VRAY_CUDA, enable=False)
     else:
@@ -1939,10 +1955,11 @@ class SubmitWindow(object):
   def init_camera(self):
     cam_parents = [cmds.listRelatives(x, ap=True)[-1] for x in cmds.ls(cameras=True)]
     for cam in cam_parents:
-      # only show renderable cameras, but look at render layer overrides to see
-      # if cameras are set to renderable in other layers
-      if (cmds.getAttr(cam + '.renderable') or
-          any(_get_layer_overrides('%s.renderable' % cam))):
+      # Only show renderable cameras, but look at render layer overrides to see
+      # if cameras are set to renderable in other layers.
+      if (_maya_attr_is_true(cmds.getAttr(cam + '.renderable')) or
+          any([_maya_attr_is_true(override)
+               for override in _get_layer_overrides('%s.renderable' % cam)])):
         cmds.menuItem(parent='camera', label=cam)
 
   def init_output_dir(self):
@@ -2231,9 +2248,16 @@ class SubmitWindow(object):
       print 'Done.'
 
   def verify_vray_production_engine(self):
-    if self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
+    supported = 'CPU or CUDA' if self.experiment_gpu else 'CPU'
+    if self.vray_production_engine_name == VRAY_ENGINE_NAME_OPENCL:
       raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
-                              'Please go to Render Settings -> VRay tab to change it to CPU or CUDA')
+                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
+    if not self.experiment_gpu and self.vray_production_engine_name != VRAY_ENGINE_NAME_CPU:
+      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
+                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
+    if self.experiment_gpu and self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
+      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
+                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
 
   @staticmethod
   def export_vrscene(vrscene_path, layer, params, start_frame, end_frame):

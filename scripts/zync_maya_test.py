@@ -66,6 +66,7 @@ class TestMayaScene(unittest.TestCase):
 
 
 class TestMaya(unittest.TestCase):
+  """Scene-less tests."""
 
   def test_replace_attr_tokens(self):
     self.assertEqual(
@@ -76,6 +77,23 @@ class TestMaya(unittest.TestCase):
         '/path/to/textures/texture01.jpg')
     with self.assertRaises(zync_maya.MayaZyncException) as _:
       zync_maya._replace_attr_tokens('<attr:path>/<attr:texture>')
+
+  def test_maya_attr_is_true(self):
+    self.assertEqual(zync_maya._maya_attr_is_true(True), True)
+    self.assertEqual(zync_maya._maya_attr_is_true(False), False)
+    self.assertEqual(zync_maya._maya_attr_is_true([True, True]), True)
+    self.assertEqual(zync_maya._maya_attr_is_true([True, False]), True)
+    self.assertEqual(zync_maya._maya_attr_is_true([False, False]), False)
+    self.assertEqual(zync_maya._maya_attr_is_true(self._generate_true_vals()), True)
+    self.assertEqual(zync_maya._maya_attr_is_true(self._generate_false_vals()), False)
+
+  def _generate_true_vals(self):
+    for i in range(3):
+      yield True
+
+  def _generate_false_vals(self):
+    for i in range(3):
+      yield False
 
 
 def _unicode_to_str(input_obj):
