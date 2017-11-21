@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.30'
+__version__ = '1.4.31'
 
 
 import base64
@@ -1422,7 +1422,6 @@ class SubmitWindow(object):
     # will be authenticated
     self.zync_conn = zync.Zync(application='maya')
 
-    self.experiment_gpu = self.zync_conn.is_experiment_enabled('EXPERIMENT_GPU')
     self.vray_production_engine_name = VRAY_ENGINE_NAME_UNKNOWN
 
     self.new_project_name = self.zync_conn.get_project_name(scene_name)
@@ -1938,7 +1937,7 @@ class SubmitWindow(object):
     rend_found = False
     default_renderer_name = self.zync_conn.MAYA_RENDERERS.get(self.renderer, 'vray')
 
-    if self.experiment_gpu and self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
+    if self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
       cmds.menuItem(parent='renderer', label=RENDER_LABEL_VRAY_CUDA)
       cmds.optionMenu('renderer', e=True, v=RENDER_LABEL_VRAY_CUDA, enable=False)
     else:
@@ -2248,16 +2247,9 @@ class SubmitWindow(object):
       print 'Done.'
 
   def verify_vray_production_engine(self):
-    supported = 'CPU or CUDA' if self.experiment_gpu else 'CPU'
-    if self.vray_production_engine_name == VRAY_ENGINE_NAME_OPENCL:
+    if self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
       raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
-                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
-    if not self.experiment_gpu and self.vray_production_engine_name != VRAY_ENGINE_NAME_CPU:
-      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
-                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
-    if self.experiment_gpu and self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
-      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
-                              'Please go to Render Settings -> VRay tab to change it to %s' % supported)
+                              'Please go to Render Settings -> VRay tab to change it to CPU or CUDA')
 
   @staticmethod
   def export_vrscene(vrscene_path, layer, params, start_frame, end_frame):
