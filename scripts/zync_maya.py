@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.31'
+__version__ = '1.4.32'
 
 
 import base64
@@ -195,6 +195,8 @@ def seq_to_glob(in_path):
     return in_path
   in_path = _replace_attr_tokens(in_path)
   in_path = re.sub('<meshitem>', '*', in_path, flags=re.IGNORECASE)
+  if '<f>' in in_path.lower():
+    return re.sub('<f>', '*', in_path, flags=re.IGNORECASE)
   if '<udim>' in in_path.lower():
     return re.sub('<udim>', '*', in_path, flags=re.IGNORECASE)
   if '<tile>' in in_path.lower():
@@ -262,7 +264,8 @@ def node_uses_image_sequence(node):
   node_path = get_file_node_path(node).lower()
   return (cmds.getAttr('%s.useFrameExtension' % node) == True or
           '<udim>' in node_path or '<tile>' in node_path or '<uvtile>' in node_path or
-          'u<u>_v<v>' in node_path or '<frame0' in node_path or '<attr:' in node_path)
+          'u<u>_v<v>' in node_path or '<frame0' in node_path or '<attr:' in node_path or
+          '<f>' in node_path)
 
 
 def _get_layer_overrides(attr):
@@ -2059,9 +2062,9 @@ class SubmitWindow(object):
   @show_exceptions
   def _submit_vray_job(self, layer_list, params, sf, ef):
     """Collects info, exports vrscenes and sends jobs
-    
+
     See also: export_vrscene
-    
+
     Args:
       layer_list: [str], List of layers names
       params: dict, render job parameters
@@ -2097,9 +2100,9 @@ class SubmitWindow(object):
   @show_exceptions
   def _submit_arnold_job(self, layer_list, params, sf, ef):
     """Collects info, exports ass files and sends jobs
-    
+
     See also: export_ass
-    
+
     Args:
       layer_list: [str], List of layers names
       params: dict, render job parameters
