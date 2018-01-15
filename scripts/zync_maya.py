@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.33'
+__version__ = '1.4.34'
 
 
 import base64
@@ -2369,9 +2369,11 @@ class SubmitWindow(object):
         '%s_defaultRenderLayer%s' % (vrscene_base, ext)
       ]
     else:
-      possible_scene_names = [
-        '%s_%s%s' % (vrscene_base, layer, ext)
-      ]
+      possible_scene_names = ['%s_%s%s' % (vrscene_base, layer, ext)]
+      # In older Vray versions rs_ prefix is used for rendersetup layers, in
+      # later versions it is ignored.
+      if layer.startswith('rs_'):
+        possible_scene_names.append('%s_%s%s' % (vrscene_base, layer[3:], ext))
 
     return possible_scene_names, render_params
 
