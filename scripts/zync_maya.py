@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.34'
+__version__ = '1.4.35'
 
 
 import base64
@@ -2168,6 +2168,20 @@ class SubmitWindow(object):
           cancelButton=cancel_message,
           icon='warning')
       if animation_warning_result != confirm_mesage:
+        raise ZyncAbortedByUser('Aborted by user')
+
+    if (cmds.attributeQuery('modifyExtension', node='defaultRenderGlobals', exists=True) and
+        cmds.getAttr('defaultRenderGlobals.modifyExtension')):
+      renumber_warning_result = cmds.confirmDialog(
+          title='Renumber Frames is On',
+          message='It looks like you have "Renumber Frames" enabled in your scene. This option is '
+                  'not supported on Zync and will likely produce incorrect results. Are you sure '
+                  'you want to submit the job using these render settings?',
+          button=(confirm_mesage, cancel_message),
+          defaultButton=confirm_mesage,
+          cancelButton=cancel_message,
+          icon='warning')
+      if renumber_warning_result != confirm_mesage:
         raise ZyncAbortedByUser('Aborted by user')
 
     print 'Collecting scene info...'
