@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.35'
+__version__ = '1.4.36'
 
 
 import base64
@@ -1803,7 +1803,7 @@ class SubmitWindow(object):
     params['instance_type'] = selected_type
 
     params['frange'] = eval_ui('frange', text=True)
-    params['step'] = int(eval_ui('frame_step', text=True))
+    params['step'] = self._get_frame_step_param()
     params['chunk_size'] = int(eval_ui('chunk_size', text=True))
     params['xres'] = int(eval_ui('x_res', text=True))
     params['yres'] = int(eval_ui('y_res', text=True))
@@ -1854,6 +1854,15 @@ class SubmitWindow(object):
       raise MayaZyncException('Distributed rendering jobs cannot use preemptible instances.')
 
     return params
+
+  def _get_frame_step_param(self):
+    try:
+      step = int(eval_ui('frame_step', text=True))
+      if step < 1:
+        raise ValueError
+      return step
+    except ValueError:
+      raise MayaZyncException('Zync only supports whole numbers >=1 for Frame Step.')
 
   @show_exceptions
   def show(self):
