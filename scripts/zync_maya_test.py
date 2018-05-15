@@ -40,7 +40,8 @@ class TestMayaScene(unittest.TestCase):
     maya.cmds.workspace(directory=os.path.dirname(os.path.dirname(self.scene_file)))
     maya.cmds.file(self.scene_file, force=True, open=True, ignoreVersion=True, prompt=False)
     scene_info_from_scene = _unicode_to_str(zync_maya.get_scene_info(
-        params['renderer'], params['layers'].split(','), False, []))
+        params['renderer'], params['layers'].split(','), False, [],
+        zync_maya.parse_frame_range(params['frange'])))
 
     # Sort the file list from each set of scene info so we don't raise errors
     # caused only by file lists being in different orders.
@@ -94,6 +95,34 @@ class TestMaya(unittest.TestCase):
   def _generate_false_vals(self):
     for i in range(3):
       yield False
+
+  def test_parse_frame_range(self):
+    self.assertEqual(zync_maya.parse_frame_range('92'), [92])
+    self.assertEqual(zync_maya.parse_frame_range('-5'), [-5])
+    self.assertEqual(zync_maya.parse_frame_range('23-26'), [23, 24, 25, 26])
+    self.assertEqual(zync_maya.parse_frame_range('-5--3'), [-5, -4, -3])
+    self.assertEqual(zync_maya.parse_frame_range('-1-2'), [-1, 0, 1, 2])
+    self.assertEqual(zync_maya.parse_frame_range('45-42'), [45, 44, 43, 42])
+    self.assertEqual(zync_maya.parse_frame_range('-97--99'), [-97, -98, -99])
+    self.assertEqual(zync_maya.parse_frame_range('1--2'), [1, 0, -1, -2])
+    self.assertEqual(zync_maya.parse_frame_range('1,57'), [1, 57])
+    self.assertEqual(zync_maya.parse_frame_range('5,23-25'), [5, 23, 24, 25])
+    with self.assertRaises(ValueError) as _:
+      zync_maya.parse_frame_range('notAFrameRange')
+
+  def test_extract_frame_num(self):
+    self.assertEqual(
+        zync_maya.extract_frame_number_from_file_path('/path/to/file.2763.exr'), 2763)
+    self.assertEqual(
+        zync_maya.extract_frame_number_from_file_path('/path/to/file.0001.exr'), 1)
+    self.assertEqual(
+        zync_maya.extract_frame_number_from_file_path('/path/to/singleFile.txt'), None)
+    self.assertEqual(
+        zync_maya.extract_frame_number_from_file_path('/path/to.2734.dir/file.png'), None)
+    self.assertEqual(
+        zync_maya.extract_frame_number_from_file_path('/path/to.2734.dir/file.9673.png'), 9673)
+    self.assertEqual(
+        zync_maya.extract_frame_number_from_file_path('/path/to/file_07.0283.exr'), 283)
 
 
 def _unicode_to_str(input_obj):

@@ -14,12 +14,13 @@ Usage:
 
 """
 
-__version__ = '1.4.36'
+__version__ = '1.4.38'
 
 
 import base64
 import copy
 import functools
+import glob
 import math
 import os
 import re
@@ -98,6 +99,23 @@ _XGEN_FILE_ATTRS = [
   'wiresFile',
   'cacheFileName',
 ]
+
+# Valid frame range regexes.
+# A single frame, e.g. 47, -4
+_SINGLE_FRAME_RE = re.compile(r'^(-?)\d+$')
+# A contiguous range of frames, e.g. 1-5, -3-2
+_FRAME_RANGE_RE = re.compile(r'^(?P<sf>(-?)\d+)-(?P<ef>(-?)\d+)$')
+
+# Regex for finding a frame number in a file path.
+_FRAME_NUMBER_RE = re.compile(r'.+\.(?P<frame>[0-9]+)\..+')
+
+# Pairs of attributes which define possible Bifrost cache locations.
+_BIFROST_CACHE_PATH_ATTRS = (
+  ('guideCachePath', 'guideCacheFileName'),
+  ('liquidCachePath', 'liquidCacheFileName'),
+  ('liquidmeshCachePath', 'liquidmeshCacheFileName'),
+  ('solidCachePath', 'solidCacheFileName'),
+)
 
 
 _XGEN_IMPORT_ERROR = None
@@ -663,7 +681,25 @@ def _mashAudio_handler(node):
   yield cmds.getAttr('%s.filename' % node)
 
 
-def get_scene_files():
+def _bifrost_handler(frames_to_render, bifrost_container):
+  cache_paths = set()
+  for cache_path_attr, cache_name_attr in _BIFROST_CACHE_PATH_ATTRS:
+    container_attrs = cmds.listAttr(bifrost_container)
+    if cache_path_attr in container_attrs and cache_name_attr in container_attrs:
+      cache_paths.add(os.path.join(
+        cmds.getAttr('%s.%s' % (bifrost_container, cache_path_attr)),
+        cmds.getAttr('%s.%s' % (bifrost_container, cache_name_attr))))
+  for cache_directory in cache_paths:
+    for cache_file in glob.glob('%s/*/*' % cache_directory):
+      frame_num = extract_frame_number_from_file_path(cache_file)
+      if frame_num is None:
+        yield cache_file
+      else:
+        if frame_num in frames_to_render:
+          yield cache_file
+
+
+def get_scene_files(frames_to_render):
   """Returns all of the files being used by the scene"""
   file_types = {
     'file': _file_handler,
@@ -704,6 +740,7 @@ def get_scene_files():
     'PxrPtexture': _pxrPtexture_handler,
     'PxrNormalMap': _pxrNormalMap_handler,
     'MASH_Audio': _mashAudio_handler,
+    'bifrostContainer': functools.partial(_bifrost_handler, frames_to_render),
   }
 
   for file_type in file_types:
@@ -1022,7 +1059,7 @@ def _rman_translate_format_to_extension(image_format):
   return formats_list[format_index+1]
 
 
-def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
+def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_render):
   """Returns scene info for the current scene.
 
   Args:
@@ -1031,6 +1068,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
     layers_to_render: [str], list of render layers that will be rendered
     is_bake: bool, whether job is a bake job
     extra_assets: [str], list of any extra files to include
+    frames_to_render: [int], list of each frame to be rendered.
 
   Returns:
     dict of scene information
@@ -1165,7 +1203,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets):
   scene_info['file_prefix'].append(layer_prefixes)
 
   print '--> files'
-  scene_info['files'] = list(set(get_scene_files()))
+  scene_info['files'] = list(set(get_scene_files(frames_to_render)))
   for full_name in extra_assets:
     scene_info['files'].append(full_name.replace('\\', '/'))
   # Xgen files are already included in the main files list, but we also
@@ -1394,6 +1432,40 @@ def _unused(*args):
   pass
 
 
+# TODO(cipriano) Move this function into zync-python. (b/79435050)
+def parse_frame_range(frame_range):
+  frame_list = list()
+  for frange_section in frame_range.split(','):
+    frame_list.extend(_parse_frame_range_section(frange_section))
+  return frame_list
+
+
+# TODO(cipriano) Support embedded step number. (b/70778535)
+def _parse_frame_range_section(frange_section):
+  range_match = _FRAME_RANGE_RE.match(frange_section)
+  if range_match:
+    start_frame = int(range_match.group('sf'))
+    end_frame = int(range_match.group('ef'))
+    if end_frame >= start_frame:
+      return range(start_frame, end_frame+1)
+    else:
+      return range(start_frame, end_frame-1, -1)
+
+  single_frame_match = _SINGLE_FRAME_RE.match(frange_section)
+  if single_frame_match:
+    return [int(single_frame_match.group(0))]
+
+  raise ValueError('unable to parse frame range section %s' % frange_section)
+
+
+# TODO(cipriano) Move this function into zync-python. (b/79435050)
+def extract_frame_number_from_file_path(file_path):
+  frame_match = _FRAME_NUMBER_RE.match(os.path.basename(file_path))
+  if frame_match:
+    return int(frame_match.group('frame'))
+  return None
+
+
 class MayaZyncException(Exception):
   pass
 
@@ -1562,14 +1634,6 @@ class SubmitWindow(object):
       cmds.checkBox('skip_check', e=True, en=True)
       cmds.textField('output_dir', e=True, en=True)
       cmds.optionMenu('renderer', e=True, en=True)
-      if eval_ui('renderer', ui_type='optionMenu', v=True) in ('vray', 'V-Ray'):
-        cmds.checkBox('vray_nightly', e=True, en=True)
-        cmds.checkBox('use_standalone', e=True, en=True)
-        cmds.checkBox('distributed', e=True, en=True)
-      else:
-        cmds.checkBox('vray_nightly', e=True, en=False)
-        cmds.checkBox('distributed', e=True, en=False)
-      cmds.checkBox('use_standalone', e=True, en=False)
       cmds.optionMenu('job_type', e=True, en=True)
       cmds.textField('frange', e=True, en=True)
       cmds.textField('frame_step', e=True, en=True)
@@ -1578,6 +1642,7 @@ class SubmitWindow(object):
       cmds.textScrollList('layers', e=True, en=True)
       cmds.textField('x_res', e=True, en=True)
       cmds.textField('y_res', e=True, en=True)
+      self.change_renderer(eval_ui('renderer', ui_type='optionMenu', v=True))
 
   @show_exceptions
   def distributed_toggle(self, checked):
@@ -2136,6 +2201,11 @@ class SubmitWindow(object):
     if not self.zync_conn.has_user_login():
       raise MayaZyncException('You must login before submitting a new job.')
 
+    job_uses_standalone = (not self.is_maya_io or eval_ui('use_standalone', 'checkBox', v=True))
+
+    if not self.verify_eula_acceptance(not job_uses_standalone):
+      cmds.error('Job submission canceled.')
+
     print 'Collecting render parameters...'
     scene_path = cmds.file(q=True, loc=True)
     params = self.get_render_params()
@@ -2198,7 +2268,8 @@ class SubmitWindow(object):
       params['scene_info'] = get_scene_info(params['renderer'],
           (params['layers'].split(',') if params['layers'] else None),
           (eval_ui('job_type', ui_type='optionMenu', v=True).lower() == 'bake'),
-          extra_assets if params['sync_extra_assets'] else [])
+          extra_assets if params['sync_extra_assets'] else [],
+          parse_frame_range(params['frange']))
     except ZyncAbortedByUser:
       # If the job is aborted just finish the submit function
       return
@@ -2206,8 +2277,7 @@ class SubmitWindow(object):
     params['plugin_version'] = __version__
 
     try:
-      if (not self.is_maya_io or
-          eval_ui('use_standalone', 'checkBox', v=True)):
+      if job_uses_standalone:
         frange_split = params['frange'].split(',')
         sf = int(frange_split[0].split('-')[0])
 
@@ -2252,9 +2322,6 @@ class SubmitWindow(object):
                                   'export rather than a render. Please disable '
                                   'this option before submitting this scene to '
                                   'Zync for rendering.')
-
-        if not self.verify_eula_acceptance():
-          cmds.error('Job submission canceled.')
 
         self.zync_conn.submit_job('maya', scene_path, params=params)
         cmds.confirmDialog(title='Success', message='Job submitted to Zync.',
@@ -2489,34 +2556,39 @@ class SubmitWindow(object):
     return self.zync_conn.generate_file_path(
         '%s.%s' % (scene_head, suffix)).replace('\\', '/')
 
-  def verify_eula_acceptance(self):
-    """Verify Autodesk EULA acceptance and if needed perform acceptance flow.
+  def verify_eula_acceptance(self, is_mayaio_job):
+    """Verify EULA/ToS acceptance and if needed perform acceptance flow.
+
+    Args:
+      is_mayaio_job: bool, whether the intended job will make use of Maya I/O.
 
     Returns:
-      bool, True if EULA is accepted, False if user declined
+      bool, True if all required agreements are accepted, False if user declined
     """
-    # find the Maya EULA
-    maya_eula = None
-    for eula in self.zync_conn.get_eulas():
-      if eula.get('eula_kind').lower() == 'mayaio':
-        maya_eula = eula
-        break
-    # blank accepted_by field indicates not yet accepted
-    if maya_eula and not maya_eula.get('accepted_by'):
+    applicable_eula_types = ['zync', 'cloud', 'licensor']
+    if is_mayaio_job:
+      applicable_eula_types.append('mayaio')
+    to_accept = [eula for eula in self.zync_conn.get_eulas()
+                 if eula.get('eula_kind').lower() in applicable_eula_types]
+    # Blank accepted_by field indicates agreement is not yet accepted.
+    not_accepted = [eula for eula in to_accept if not eula.get('accepted_by')]
+    if not_accepted:
       eula_url = '%s/account#legal' % self.zync_conn.url
-      # let the user know what's about to happen
-      cmds.confirmDialog(title='Accept EULA', message=('In order to launch ' +
-                         'Maya jobs you must accept the Autodesk EULA. It ' +
-                         'looks like you haven\'t accepted this yet.\n\nA ' +
-                         'browser window will open so you can do this, then ' +
-                         'you\'ll be able to submit your job.\n\nURL: ' +
-                         eula_url), button=['OK'], defaultButton='OK')
-      # open page in browser
+      cmds.confirmDialog(
+          title='Accept Agreement',
+          message=(
+              'Please read and accept the required EULA(s) and Terms of Service(s). '
+              'A browser window will open where you can do this.\n\nURL: %s' % eula_url),
+          button=['OK'],
+          defaultButton='OK')
       webbrowser.open(eula_url)
-      # wait for user to let us know they've responded
-      eula_response = cmds.confirmDialog(title='Accept EULA', message=('Have ' +
-          'you accepted the EULA?'), button=['Yes', 'No'], defaultButton='Yes',
-          cancelButton='No', dismissString='No')
+      eula_response = cmds.confirmDialog(
+          title='Accept Agreement',
+          message='Have you accepted all agreements?',
+          button=['Yes', 'No'],
+          defaultButton='Yes',
+          cancelButton='No',
+          dismissString='No')
 
       if eula_response == 'No':
         return False

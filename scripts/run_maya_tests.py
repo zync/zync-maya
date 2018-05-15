@@ -50,7 +50,7 @@ def _get_scene_info_mel_script(renderer, layers, output_file):
   script_text += '\'%s\', ' % renderer
   # List of layers being rendered comes in a comma-separated string, no need to join.
   script_text += '[\'%s\'], ' % layers
-  script_text += 'False, [])"); '
+  script_text += 'False, [], [])"); '
   script_text += 'string $output_file = "%s"; ' % output_file
   script_text += '$fp = `fopen $output_file "w"`; '
   script_text += 'fprint $fp $scene_info; '
