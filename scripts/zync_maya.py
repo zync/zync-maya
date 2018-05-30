@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.38'
+__version__ = '1.4.39'
 
 
 import base64
@@ -2209,6 +2209,13 @@ class SubmitWindow(object):
     print 'Collecting render parameters...'
     scene_path = cmds.file(q=True, loc=True)
     params = self.get_render_params()
+
+    if 'PREEMPTIBLE' in params['instance_type']:
+      import pvm_consent_dialog
+      from settings import Settings
+      consent_dialog = pvm_consent_dialog.PvmConsentDialog()
+      if not Settings.get().get_pvm_ack() and not consent_dialog.prompt():
+        return
 
     if params['sync_extra_assets']:
       import_zync_python()
