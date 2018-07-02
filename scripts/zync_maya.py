@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.39'
+__version__ = '1.4.40'
 
 
 import base64
@@ -2638,7 +2638,7 @@ def show_update_notification():
             align="center", width=200)
   cmds.text(label=_link('https://download.zyncrender.com', 'Download the Update'),
             hyperlink=True, align="center", width=200)
-  cmds.text(label=_link('https://sites.google.com/site/zyncpublic/doc/update-plugins',
+  cmds.text(label=_link('https://docs.zyncrender.com/update-plugins',
             'Plugin Update HOWTO'), hyperlink=True, align="center", width=200)
   cmds.text(label='  Once the update is installed, please<br>restart Maya to complete the process.',
             align="center", width=200)

@@ -1,6 +1,6 @@
 # Zync Plugin for Autodesk's Maya
 
-For a list of Maya versions supported on Zync please see [our main website](https://www.zyncrender.com/#about). You can find additional info in [our documentation](https://sites.google.com/site/zyncpublic/doc/faq#TOC-Q.-What-applications-renderers-plug-ins-do-you-support-).
+For a list of Maya versions supported on Zync please see [our main website](https://www.zyncrender.com/#about). You can find additional info in [our documentation](https://docs.zyncrender.com/faq#q-what-applicationrendererplugin-versions-do-you-support).
 
 ## zync-python
 
@@ -10,7 +10,7 @@ Before trying to install zync-maya, make sure to [download zync-python](https://
 
 # Warning
 
-Note that the simplest and recommended way to install Zync plugins is through the  Zync Client Application  (see [instructions](https://sites.google.com/site/zyncpublic/doc/install#plugins)). The steps described below are for advanced users and we recommend to proceed with them only if you need to modify the plugin code for your custom needs.
+Note that the simplest and recommended way to install Zync plugins is through the Zync Client Application (see [instructions](https://docs.zyncrender.com/install-and-setup#option-1-the-plugins-tab-in-the-zync-client-app-simple-recommended-for-most-users)). The steps described below are for advanced users and we recommend to proceed with them only if you need to modify the plugin code for your custom needs.
 
 ## Clone the Repository
 
