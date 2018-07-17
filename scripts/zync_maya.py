@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.40'
+__version__ = '1.4.41'
 
 
 import base64
@@ -686,9 +686,11 @@ def _bifrost_handler(frames_to_render, bifrost_container):
   for cache_path_attr, cache_name_attr in _BIFROST_CACHE_PATH_ATTRS:
     container_attrs = cmds.listAttr(bifrost_container)
     if cache_path_attr in container_attrs and cache_name_attr in container_attrs:
-      cache_paths.add(os.path.join(
-        cmds.getAttr('%s.%s' % (bifrost_container, cache_path_attr)),
-        cmds.getAttr('%s.%s' % (bifrost_container, cache_name_attr))))
+      cache_path = cmds.getAttr('%s.%s' % (bifrost_container, cache_path_attr))
+      cache_name = cmds.getAttr('%s.%s' % (bifrost_container, cache_name_attr))
+      if cache_path and cache_name:
+        cache_paths.add(os.path.join(cache_path, cache_name))
+
   for cache_directory in cache_paths:
     for cache_file in glob.glob('%s/*/*' % cache_directory):
       frame_num = extract_frame_number_from_file_path(cache_file)
@@ -2130,7 +2132,8 @@ class SubmitWindow(object):
   def select_files(self):
     import_zync_python()
     import file_select_dialog
-    self.file_select_dialog = file_select_dialog.FileSelectDialog(self.new_project_name)
+    proj_name = eval_ui('new_project_name', text=True)
+    self.file_select_dialog = file_select_dialog.FileSelectDialog(proj_name)
     self.file_select_dialog.show()
 
   @show_exceptions
@@ -2220,7 +2223,8 @@ class SubmitWindow(object):
     if params['sync_extra_assets']:
       import_zync_python()
       import file_select_dialog
-      extra_assets = file_select_dialog.FileSelectDialog.get_extra_assets(self.new_project_name)
+      proj_name = eval_ui('new_project_name', text=True)
+      extra_assets = file_select_dialog.FileSelectDialog.get_extra_assets(proj_name)
       if not extra_assets:
         raise MayaZyncException('No extra assets selected')
 
