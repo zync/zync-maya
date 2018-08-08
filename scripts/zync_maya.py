@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.41'
+__version__ = '1.4.42'
 
 
 import base64
@@ -2459,8 +2459,10 @@ class SubmitWindow(object):
     # Run the export.
     maya.mel.eval('vrend -camera "%s" -layer "%s"' % (render_params['camera'], layer))
 
+    queue_empty = cmds.undoInfo(query=True, undoQueueEmpty=True)
     cmds.undoInfo(closeChunk=True)
-    cmds.undo()
+    if not queue_empty:
+      cmds.undo()
 
     vrscene_base, ext = os.path.splitext(vrscene_path)
     if layer == 'defaultRenderLayer':
@@ -2543,8 +2545,10 @@ class SubmitWindow(object):
       '-shadowLinks 1 -cam %s' % (params['camera'],))
     maya.mel.eval(ass_cmd)
 
+    queue_empty = cmds.undoInfo(query=True, undoQueueEmpty=True)
     cmds.undoInfo(closeChunk=True)
-    cmds.undo()
+    if not queue_empty:
+      cmds.undo()
 
     return layer_file_wildcard, render_params
 
