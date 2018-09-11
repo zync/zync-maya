@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.42'
+__version__ = '1.4.43'
 
 
 import base64
@@ -2150,11 +2150,11 @@ class SubmitWindow(object):
     """
     print 'Vray job, collecting additional info...'
     self.verify_vray_production_engine()
-    vrscene_path = self.get_standalone_scene_path('vrscene')
 
     print 'Exporting .vrscene files...'
     for layer in layer_list:
       print 'Exporting layer %s...' % layer
+      vrscene_path = self.get_standalone_scene_path('vrscene', layer=layer)
       possible_scene_names, render_params = self.export_vrscene(
         vrscene_path, layer, params, sf, ef)
 
@@ -2472,7 +2472,10 @@ class SubmitWindow(object):
         '%s_defaultRenderLayer%s' % (vrscene_base, ext)
       ]
     else:
-      possible_scene_names = ['%s_%s%s' % (vrscene_base, layer, ext)]
+      possible_scene_names = [
+        '%s_%s%s' % (vrscene_base, layer, ext),
+        vrscene_path,
+      ]
       # In older Vray versions rs_ prefix is used for rendersetup layers, in
       # later versions it is ignored.
       if layer.startswith('rs_'):
@@ -2552,7 +2555,7 @@ class SubmitWindow(object):
 
     return layer_file_wildcard, render_params
 
-  def get_standalone_scene_path(self, suffix):
+  def get_standalone_scene_path(self, suffix, layer=None):
     """Get a file path for exporting a standalone scene, based on current scene
     and matching the Zync convention of where these files should be stored.
 
@@ -2561,13 +2564,15 @@ class SubmitWindow(object):
 
     Args:
       suffix: str, the suffix of the filename e.g. "vrscene" or "ass"
+      layer: str, the layer name to append to the file path
 
     Returns:
       str the standalone scene file path
     """
     scene_path = cmds.file(q=True, loc=True)
     scene_head, _ = os.path.splitext(scene_path)
-    scene_name = os.path.basename(scene_head)
+    if layer is not None:
+      scene_head += '_%s' % layer
     return self.zync_conn.generate_file_path(
         '%s.%s' % (scene_head, suffix)).replace('\\', '/')
 
