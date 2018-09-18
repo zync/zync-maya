@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.43'
+__version__ = '1.4.44'
 
 
 import base64
@@ -39,6 +39,17 @@ VRAY_ENGINE_NAME_OPENCL = 'opencl'  # 1
 VRAY_ENGINE_NAME_CUDA = 'cuda'  # 2
 VRAY_ENGINE_NAME_UNKNOWN = 'unknown'
 RENDER_LABEL_VRAY_CUDA = 'V-Ray (CUDA)'
+
+
+class NamePrefixAttributes(object):
+  arnold = 'defaultRenderGlobals.imageFilePrefix'
+  sw = 'defaultRenderGlobals.imageFilePrefix'
+  mr = 'defaultRenderGlobals.imageFilePrefix'
+  vray = 'vraySettings.fileNamePrefix'
+
+  @classmethod
+  def get_prefix(cls, renderer):
+    return getattr(cls, renderer)
 
 
 def show_exceptions(func):
@@ -108,6 +119,12 @@ _FRAME_RANGE_RE = re.compile(r'^(?P<sf>(-?)\d+)-(?P<ef>(-?)\d+)$')
 
 # Regex for finding a frame number in a file path.
 _FRAME_NUMBER_RE = re.compile(r'.+\.(?P<frame>[0-9]+)\..+')
+
+# Regex string for checking if string contains a layer token.
+_HAS_LAYER_TOKEN_RE = re.compile(r'.*%l.*|.*<layer>.*|.*<renderlayer>.*', re.IGNORECASE)
+_SUBSTITUTE_LAYER_TOKEN_RE = re.compile(r'%l|<layer>|<renderlayer>', re.IGNORECASE)
+_SUBSTITUTE_CAMERA_TOKEN_RE = re.compile(r'%c|<camera>', re.IGNORECASE)
+_SUBSTITUTE_SCENE_TOKEN_RE = re.compile(r'%s|<scene>', re.IGNORECASE)
 
 # Pairs of attributes which define possible Bifrost cache locations.
 _BIFROST_CACHE_PATH_ATTRS = (
@@ -987,16 +1004,8 @@ def collect_layer_info(layer, renderer):
       if cmds.getAttr('%s.enabled' % (r_pass,)) == True:
         layer_info['render_passes'].append(r_pass)
 
-  # get prefix information
-  if renderer == 'vray':
-    node = 'vraySettings'
-    attribute = 'fileNamePrefix'
-  elif renderer in ('sw', 'mr', 'arnold'):
-    node = 'defaultRenderGlobals'
-    attribute = 'imageFilePrefix'
   try:
-    layer_prefix = cmds.getAttr('%s.%s' % (node, attribute))
-    layer_info['prefix'] = layer_prefix
+    layer_info['prefix'] = cmds.getAttr(NamePrefixAttributes.get_prefix(renderer))
   except Exception:
     layer_info['prefix'] = ''
 
@@ -1303,21 +1312,15 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
         for output in prefixes_to_verify:
           if not output or '<RenderPass>' not in output:
             output_prefix_aov_warning = True
-        if (output_prefix_aov_warning and not override_prefix) or \
-            (override_prefix and '<RenderPass>' not in override_prefix):
-          confirm_mesage = 'Yes, I want to send it.'
-          cancel_message = 'No, do not send.'
-          AOV_dialog_result = cmds.confirmDialog(
-              title='RenderPass tag missing',
-              message='AOVs are selected to render into separate files, but the '
-                      'output prefix of one of the layers does not contain '
-                      '<RenderPass> tag. Are you sure the configuration is correct?',
-              button=(confirm_mesage, cancel_message),
-              defaultButton=confirm_mesage,
-              cancelButton=cancel_message,
-              icon='warning')
-          if AOV_dialog_result != confirm_mesage:
-            raise ZyncAbortedByUser('Aborted by user')
+
+        SubmissionCheck(
+            check=lambda: (output_prefix_aov_warning and not override_prefix) or \
+                          (override_prefix and '<RenderPass>' not in override_prefix),
+            title='RenderPass tag missing',
+            message='AOVs are selected to render into separate files, but the '
+                    'output prefix of one of the layers does not contain '
+                    '<RenderPass> tag. Are you sure the configuration is correct?',
+        ).run_check()
 
     else:
       scene_info['aovs'] = []
@@ -1471,11 +1474,85 @@ def extract_frame_number_from_file_path(file_path):
 class MayaZyncException(Exception):
   pass
 
+
 class ZyncAbortedByUser(Exception):
   """
   Exception to handle user's decision about canceling a process.
   """
   pass
+
+
+class ZyncSubmissionCheckError(Exception):
+  """
+  Exception to handle errors when trying to run a SubmissionCheck.
+  """
+  pass
+
+
+class SubmissionCheck(object):
+  """
+  Manages the running of submission checks and display of confirmation dialogs.
+  """
+  def __init__(self, check,  title, message='', check_args=None, check_kwargs=None,
+               confirm_msg='Yes, submit job.', cancel_msg='No, cancel job submission.'):
+    """
+    Initialize Check and set attributes
+
+    Args:
+      check: callable, function that runs check, callable should return a bool.
+      title: str, title of confirm dialog window.
+      message: str, message to display on confirm dialog.
+      check_args: list, list of arguments to pass to check function.
+      check_kwargs: dict, keyword arguments to pass to check function.
+      confirm_msg: str, text to display on confirm button.
+      cancel_msg: str, text to display on cancel button.
+    """
+    self.title = title
+    self.message = message
+    self.check = check
+    self.check_args = check_args if check_args is not None else []
+    self.check_kwargs = check_kwargs if check_kwargs is not None else {}
+    self.confirm_msg = confirm_msg
+    self.cancel_msg = cancel_msg
+
+  def confirm_or_abort(self):
+    """
+    Display a confirmation dialog, allowing the user to continue or abort the job submission
+
+    Raises:
+      ZyncAbortedByUser exception if user aborts.
+    """
+    response = cmds.confirmDialog(
+      title=self.title,
+      message=self.message,
+      button=(self.confirm_msg, self.cancel_msg),
+      defaultButton=self.confirm_msg,
+      cancelButton=self.cancel_msg,
+      icon='warning')
+    if response != self.confirm_msg:
+      raise ZyncAbortedByUser('Aborted by user')
+
+  def run_check(self, show_confirmation=True):
+    """
+    Run the check and show the confirmation dialog.
+    Args:
+      show_confirmation: bool, whether or not to show the confirmation dialog.
+
+    Returns:
+      bool, the return value of the check.
+
+    Raises:
+      ZyncSubmissionCheckError when there is an error running the submission check or if check does not return a bool.
+    """
+    try:
+      check_return = self.check(*self.check_args, **self.check_kwargs)
+    except Exception, e:
+      raise ZyncSubmissionCheckError('{}: {}'.format(self.title, e.message))
+    if not isinstance(check_return, bool):
+      raise ZyncSubmissionCheckError('{}: Invalid check. Did not return a boolean.'.format(self.title))
+    if check_return and show_confirmation:
+      self.confirm_or_abort()
+    return check_return
 
 
 class SubmitWindow(object):
@@ -2228,51 +2305,33 @@ class SubmitWindow(object):
       if not extra_assets:
         raise MayaZyncException('No extra assets selected')
 
-    confirm_mesage = 'Yes, submit job.'
-    cancel_message = 'No, cancel job submission.'
-
-    if '(ALPHA)' in params.get('instance_type', ''):
-      alpha_warning_result = cmds.confirmDialog(
+    submission_checks = [
+      SubmissionCheck(
+          check=lambda: '(ALPHA)' in params.get('instance_type', ''),
           title='ALPHA instance type selected',
-          message=('You\'ve selected an instance type for your job which is '
-                  'still in alpha, and could be unstable for some workloads. '
-                  'Are you sure you want to submit the job using this '
-                  'instance type?'),
-          button=(confirm_mesage, cancel_message),
-          defaultButton=confirm_mesage,
-          cancelButton=cancel_message,
-          icon='warning')
-      if alpha_warning_result != confirm_mesage:
-        raise ZyncAbortedByUser('Aborted by user')
-
-    if (cmds.attributeQuery('animation', node='defaultRenderGlobals', exists=True) and
-        not cmds.getAttr('defaultRenderGlobals.animation')):
-      animation_warning_result = cmds.confirmDialog(
+          message='You\'ve selected an instance type for your job which is '
+          'still in alpha, and could be unstable for some workloads. '
+          'Are you sure you want to submit the job using this '
+          'instance type?'),
+      SubmissionCheck(
+          check=lambda: (cmds.attributeQuery('animation', node='defaultRenderGlobals', exists=True) and
+                         not cmds.getAttr('defaultRenderGlobals.animation')),
           title='Animation Off',
-          message=('It looks like you have animation disabled in your scene. '
-                   'If you render multiple frames they will probably overwrite '
-                   'each other. Are you sure you want to submit the job using '
-                   'these render settings?'),
-          button=(confirm_mesage, cancel_message),
-          defaultButton=confirm_mesage,
-          cancelButton=cancel_message,
-          icon='warning')
-      if animation_warning_result != confirm_mesage:
-        raise ZyncAbortedByUser('Aborted by user')
-
-    if (cmds.attributeQuery('modifyExtension', node='defaultRenderGlobals', exists=True) and
-        cmds.getAttr('defaultRenderGlobals.modifyExtension')):
-      renumber_warning_result = cmds.confirmDialog(
+          message='It looks like you have animation disabled in your scene. '
+          'If you render multiple frames they will probably overwrite '
+          'each other. Are you sure you want to submit the job using '
+          'these render settings?'),
+      SubmissionCheck(
+          check=lambda: (cmds.attributeQuery('modifyExtension', node='defaultRenderGlobals', exists=True) and
+                         cmds.getAttr('defaultRenderGlobals.modifyExtension')),
           title='Renumber Frames is On',
           message='It looks like you have "Renumber Frames" enabled in your scene. This option is '
-                  'not supported on Zync and will likely produce incorrect results. Are you sure '
-                  'you want to submit the job using these render settings?',
-          button=(confirm_mesage, cancel_message),
-          defaultButton=confirm_mesage,
-          cancelButton=cancel_message,
-          icon='warning')
-      if renumber_warning_result != confirm_mesage:
-        raise ZyncAbortedByUser('Aborted by user')
+          'not supported on Zync and will likely produce incorrect results. Are you sure '
+          'you want to submit the job using these render settings?')
+    ]
+
+    for submission_check in submission_checks:
+      submission_check.check()
 
     print 'Collecting scene info...'
     try:
@@ -2298,6 +2357,14 @@ class SubmitWindow(object):
         else:
           layer_list = params['layers'].split(',')
           ef = int(frange_split[-1].split('-')[-1])
+
+        SubmissionCheck(
+            check=output_has_layer_problems,
+            title='Layer not in output filename',
+            check_args=[params['renderer'], layer_list],
+            message='The specified File Name Prefix does not include a layer token (%l, <layer>, <renderlayer>). '
+                    'The output rendered files may overwrite each other. Are you sure you want to submit?'
+        ).run_check()
 
         if params['renderer'] == 'vray':
           self._submit_vray_job(layer_list, params, sf, ef)
@@ -2392,16 +2459,14 @@ class SubmitWindow(object):
         params['scene_info']['extension'].strip() == ''):
       render_params['scene_info']['extension'] = 'png'
 
-    tail = cmds.getAttr('vraySettings.fileNamePrefix')
+    tail = cmds.getAttr(NamePrefixAttributes.vray)
     if not tail:
       tail = scene_name
+      if len(params['layers'].split(',')) > 1:
+        tail += '_{}'.format(layer)
     else:
-      tail = tail.replace('%s', scene_name)
-      tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
       clean_camera = render_params['camera'].replace(':', '_')
-      tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
-        flags=re.IGNORECASE)
-      tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+      tail = replace_tokens_in_file_prefix(tail, scene_name, layer, clean_camera)
     if tail[-1] != '.':
       tail += '.'
 
@@ -2514,16 +2579,14 @@ class SubmitWindow(object):
     render_params['project_dir'] = params['project']
     render_params['output_dir'] = params['out_path']
 
-    tail = cmds.getAttr('defaultRenderGlobals.imageFilePrefix')
+    tail = cmds.getAttr(NamePrefixAttributes.arnold)
     if not tail:
       tail = scene_name
+      if len(params['layers'].split(',')) > 1:
+        tail += '_{}'.format(layer)
     else:
-      tail = tail.replace('%s', scene_name)
-      tail = re.sub('<scene>', scene_name, tail, flags=re.IGNORECASE)
       clean_camera = params['camera'].replace(':', '_')
-      tail = re.sub('%l|<layer>|<renderlayer>', layer, tail,
-        flags=re.IGNORECASE)
-      tail = re.sub('%c|<camera>', clean_camera, tail, flags=re.IGNORECASE)
+      tail = replace_tokens_in_file_prefix(tail, scene_name, layer, clean_camera)
       try:
         render_version = cmds.getAttr('defaultRenderGlobals.renderVersion')
         if render_version != None:
@@ -2638,6 +2701,51 @@ def is_latest_version():
       print traceback.format_exc()
       return True
   return _VERSION_CHECK_RESULT
+
+
+def replace_tokens_in_file_prefix(file_prefix, scene_name, layer, camera):
+  """
+  Replace various tokens in the file output prefix with values from the scene.
+
+  Args:
+    file_prefix: str, string containing tokens to be replaced.
+    scene_name: str, name of scene file to replace _SUBSTITUTE_SCENE_TOKEN_RE.
+    layer: str, name of layer to replace _SUBSTITUTE_LAYER_TOKEN_RE.
+    camera: str, name of camera to replace _SUBSTITUTE_CAMERA_TOKEN_RE.
+
+  Returns:
+      str, token replaced file prefix.
+  """
+  mappings = (
+    (_SUBSTITUTE_SCENE_TOKEN_RE, scene_name),
+    (_SUBSTITUTE_LAYER_TOKEN_RE, layer),
+    (_SUBSTITUTE_CAMERA_TOKEN_RE, camera),
+  )
+  for regex, value in mappings:
+    file_prefix = re.sub(regex, value, file_prefix)
+  return file_prefix
+
+
+def output_has_layer_problems(renderer, layer_list):
+  """
+  Submission check to ensure a layer token (%l, <layer>, or <renderlayer>) exists in render file name output attribute
+  and that there are multiple render layer in the layer_list. If the prefix is empty, return False since we'll take
+  care of setting the output path.
+
+  Args:
+      renderer: str, name of renderer.
+      layer_list: [str], list of string names of layers to be checked.
+
+  Returns:
+      bool, True if outputs are problematic False if outputs are safe
+  """
+  try:
+    output_prefix = cmds.getAttr(NamePrefixAttributes.get_prefix(renderer))
+  except AttributeError:
+    raise MayaZyncException('Renderer %s unsupported for rendering.' % renderer)
+  if output_prefix is None:
+    return False
+  return len(layer_list) > 1 and not re.match(_HAS_LAYER_TOKEN_RE, output_prefix)
 
 
 def show_update_notification():

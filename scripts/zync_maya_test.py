@@ -15,30 +15,34 @@ import zync_maya
 
 class TestMayaScene(unittest.TestCase):
   """Scene-based tests, acting on an individual scene which must be provided."""
+  scene_file = None
+  info_file = None
+  maya_cmds = None
+  maya_mel = None
 
-  def __init__(self, testname, scene_file, info_file):
-    super(TestMayaScene, self).__init__(testname)
-    self.scene_file = scene_file
-    self.info_file = info_file
-    # The scene JSON objects can get quite large and if there is a diff found
-    # we want to display the whole thing for easier debugging.
-    self.maxDiff = None
+  def setUp(self):
+    """
+    Import the maya api modules and initialize standalone if not already done. Ensure each test starts with a new file.
+    """
+    if self.maya_cmds is None:
+      import maya.standalone
+      maya.standalone.initialize()
+      import maya.cmds
+      import maya.mel
+      self.maya_cmds = maya.cmds
+      self.maya_mel = maya.mel
+    self.maya_cmds.file(f=True, new=True)
 
   def test_scene_info(self):
+    if self.scene_file is None:
+      raise unittest.SkipTest('scene_file is required to run this test.')
     with open(self.info_file) as fp:
       params = json.loads(fp.read())['params']
     scene_info_master = _unicode_to_str(params['scene_info'])
 
-    # Would prefer not to import here, but you can't import maya.cmds before
-    # running maya.standalone.initialize() and there's no reason to add the
-    # Maya overhead for tests that aren't going to actually use maya.cmds.
-    import maya.standalone
-    maya.standalone.initialize()
-    import maya.cmds
-
     # Assume the structure is <project folder>/scenes/<scene file>.
-    maya.cmds.workspace(directory=os.path.dirname(os.path.dirname(self.scene_file)))
-    maya.cmds.file(self.scene_file, force=True, open=True, ignoreVersion=True, prompt=False)
+    self.maya_cmds.workspace(directory=os.path.dirname(os.path.dirname(self.scene_file)))
+    self.maya_cmds.file(self.scene_file, force=True, open=True, ignoreVersion=True, prompt=False)
     scene_info_from_scene = _unicode_to_str(zync_maya.get_scene_info(
         params['renderer'], params['layers'].split(','), False, [],
         zync_maya.parse_frame_range(params['frange'])))
@@ -64,6 +68,37 @@ class TestMayaScene(unittest.TestCase):
           scene_info_master['renderman_version'].split('.')[0])
 
     self.assertEqual(scene_info_from_scene, scene_info_master)
+
+  def test_output_has_layer_problems(self):
+    self.maya_cmds.loadPlugin('vrayformaya')
+    renderer = 'vray'
+    self.maya_cmds.setAttr("defaultRenderGlobals.currentRenderer", renderer, type="string")
+    self.maya_mel.eval('vrayCreateVRaySettingsNode')
+    prefix_attr = 'vraySettings.fileNamePrefix'
+
+    # Test single layer and None fileNamePrefix
+    layer_list = ['single_layer']
+    self.assertFalse(zync_maya.output_has_layer_problems(renderer, layer_list))
+
+    # Test multi-layer and None fileNamePrefix
+    layer_list = ['foo', 'bar']
+    self.assertFalse(zync_maya.output_has_layer_problems(renderer, layer_list))
+
+    # Test multi-layer and non-layered fileNamePrefix
+    self.maya_cmds.setAttr(prefix_attr, 'output_prefix_layer', type="string")
+    self.assertTrue(zync_maya.output_has_layer_problems(renderer, layer_list))
+
+    # Test multi-layer and layered fileNamePrefix
+    self.maya_cmds.setAttr(prefix_attr, 'output_prefix_path_<layer>', type="string")
+    self.assertFalse(zync_maya.output_has_layer_problems(renderer, layer_list))
+
+    # Test multi-layer and layered fileNamePrefix
+    self.maya_cmds.setAttr(prefix_attr, 'output_prefix_path_<renderlayer>', type="string")
+    self.assertFalse(zync_maya.output_has_layer_problems(renderer, layer_list))
+
+    # Test multi-layer and layered fileNamePrefix
+    self.maya_cmds.setAttr(prefix_attr, 'output_prefix_path_%l', type="string")
+    self.assertFalse(zync_maya.output_has_layer_problems(renderer, layer_list))
 
 
 class TestMaya(unittest.TestCase):
@@ -124,6 +159,42 @@ class TestMaya(unittest.TestCase):
     self.assertEqual(
         zync_maya.extract_frame_number_from_file_path('/path/to/file_07.0283.exr'), 283)
 
+  def test_submission_check(self):
+    check = lambda: True
+    true_check = zync_maya.SubmissionCheck(check=check, title='True check')
+    self.assertTrue(true_check.run_check(show_confirmation=False))
+
+    check = lambda: False
+    false_check = zync_maya.SubmissionCheck(check=check, title='False check')
+    self.assertFalse(false_check.run_check(show_confirmation=False))
+
+    check = lambda: 'invalid type'
+    exception_check = zync_maya.SubmissionCheck(check=check, title='Exception check')
+    with self.assertRaises(zync_maya.ZyncSubmissionCheckError):
+      exception_check.run_check(show_confirmation=False)
+
+  def test_replace_tokens_in_file_prefix(self):
+    input = '%s_<layer>_<camera>'
+    scene_name = 'scene'
+    layer = 'layer'
+    camera = 'camera'
+    expected = 'scene_layer_camera'
+    self.assertEqual(zync_maya.replace_tokens_in_file_prefix(input, scene_name, layer, camera), expected)
+
+    input = '<scene>_layer_camera'
+    scene_name = 'scene'
+    layer = 'null'
+    camera = 'null'
+    expected = 'scene_layer_camera'
+    self.assertEqual(zync_maya.replace_tokens_in_file_prefix(input, scene_name, layer, camera), expected)
+
+    input = 'camera_scene_layer'
+    scene_name = 'null'
+    layer = 'null'
+    camera = 'null'
+    expected = 'camera_scene_layer'
+    self.assertEqual(zync_maya.replace_tokens_in_file_prefix(input, scene_name, layer, camera), expected)
+
 
 def _unicode_to_str(input_obj):
   """Returns a version of the input with all unicode replaced by standard
@@ -159,10 +230,15 @@ if __name__ == '__main__':
     if not args.info_file:
       print 'If you use --scene you must also use --info-file.'
       sys.exit(1)
+    TestMayaScene.scene_file = args.scene
+    TestMayaScene.info_file = args.info_file
     suite = unittest.TestSuite()
-    suite.addTest(TestMayaScene('test_scene_info', args.scene, args.info_file))
+    suite.addTest(TestMayaScene('test_scene_info'))
   else:
-    suite = unittest.TestLoader().loadTestsFromTestCase(TestMaya)
+    loader = unittest.TestLoader()
+    suite = unittest.TestSuite()
+    suite.addTests(loader.loadTestsFromTestCase(TestMaya))
+    suite.addTests(loader.loadTestsFromTestCase(TestMayaScene))
   test_result = unittest.TextTestRunner().run(suite)
 
   # Since we're not using unittest.main, we need to manually provide an exit
