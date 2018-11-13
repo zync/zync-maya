@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.44'
+__version__ = '1.4.46'
 
 
 import base64
@@ -1494,7 +1494,8 @@ class SubmissionCheck(object):
   Manages the running of submission checks and display of confirmation dialogs.
   """
   def __init__(self, check,  title, message='', check_args=None, check_kwargs=None,
-               confirm_msg='Yes, submit job.', cancel_msg='No, cancel job submission.'):
+               confirm_msg='Yes, submit job.', cancel_msg='No, cancel job submission.',
+               always_fail=False):
     """
     Initialize Check and set attributes
 
@@ -1514,6 +1515,7 @@ class SubmissionCheck(object):
     self.check_kwargs = check_kwargs if check_kwargs is not None else {}
     self.confirm_msg = confirm_msg
     self.cancel_msg = cancel_msg
+    self.always_fail = always_fail
 
   def confirm_or_abort(self):
     """
@@ -1550,8 +1552,11 @@ class SubmissionCheck(object):
       raise ZyncSubmissionCheckError('{}: {}'.format(self.title, e.message))
     if not isinstance(check_return, bool):
       raise ZyncSubmissionCheckError('{}: Invalid check. Did not return a boolean.'.format(self.title))
-    if check_return and show_confirmation:
-      self.confirm_or_abort()
+    if check_return:
+      if self.always_fail:
+        raise ZyncSubmissionCheckError(self.message)
+      elif show_confirmation:
+        self.confirm_or_abort()
     return check_return
 
 
@@ -2049,7 +2054,7 @@ class SubmitWindow(object):
     old_types = cmds.optionMenu('instance_type', q=True, ill=True)
     if old_types is not None:
       cmds.deleteUI(old_types)
-    current_renderer = self.get_renderer()
+    current_renderer = '%s-maya' % self.get_renderer()
     set_to = None
 
     self.refresh_instance_types_cache()
@@ -2324,14 +2329,15 @@ class SubmitWindow(object):
       SubmissionCheck(
           check=lambda: (cmds.attributeQuery('modifyExtension', node='defaultRenderGlobals', exists=True) and
                          cmds.getAttr('defaultRenderGlobals.modifyExtension')),
+          always_fail=True,
           title='Renumber Frames is On',
           message='It looks like you have "Renumber Frames" enabled in your scene. This option is '
-          'not supported on Zync and will likely produce incorrect results. Are you sure '
-          'you want to submit the job using these render settings?')
+          'not supported on Zync and will cause rendered frames to overwrite each other. Please '
+          'disable it before continuing.')
     ]
 
     for submission_check in submission_checks:
-      submission_check.check()
+      submission_check.run_check()
 
     print 'Collecting scene info...'
     try:
