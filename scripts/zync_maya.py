@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.46'
+__version__ = '1.4.47'
 
 
 import base64
@@ -367,8 +367,9 @@ def _cache_file_handler(node):
   path = cmds.getAttr('%s.cachePath' % node)
   cache_name = cmds.getAttr('%s.cacheName' % node)
 
-  yield '%s/%s.mc' % (path, cache_name)
-  yield '%s/%s.mcx' % (path, cache_name)
+  yield '%s/%s*.mc' % (path, cache_name)
+  yield '%s/%s*.mcc' % (path, cache_name)
+  yield '%s/%s*.mcx' % (path, cache_name)
   yield '%s/%s.xml' % (path, cache_name)
 
 
