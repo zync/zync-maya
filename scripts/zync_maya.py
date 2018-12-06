@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.47'
+__version__ = '1.4.48'
 
 
 import base64
@@ -40,6 +40,16 @@ VRAY_ENGINE_NAME_CUDA = 'cuda'  # 2
 VRAY_ENGINE_NAME_UNKNOWN = 'unknown'
 RENDER_LABEL_VRAY_CUDA = 'V-Ray (CUDA)'
 
+TOKEN_TO_PATTERN_MAP = {
+    '<f>': '<f>',
+    '<udim>': '<udim>',
+    '<tile>': '<tile>',
+    '<uvtile>': '<uvtile>',
+    'u<u>_v<v>': '<u>|<v>',
+    '<u>_<v>': '<u>|<v>',
+    '<frame0': r'<frame0\d+>',
+    '<attr:': None
+}
 
 class NamePrefixAttributes(object):
   arnold = 'defaultRenderGlobals.imageFilePrefix'
@@ -230,20 +240,18 @@ def seq_to_glob(in_path):
     return in_path
   in_path = _replace_attr_tokens(in_path)
   in_path = re.sub('<meshitem>', '*', in_path, flags=re.IGNORECASE)
-  if '<f>' in in_path.lower():
-    return re.sub('<f>', '*', in_path, flags=re.IGNORECASE)
-  if '<udim>' in in_path.lower():
-    return re.sub('<udim>', '*', in_path, flags=re.IGNORECASE)
-  if '<tile>' in in_path.lower():
-    return re.sub('<tile>', '*', in_path, flags=re.IGNORECASE)
-  if '<uvtile>' in in_path.lower():
-    return re.sub('<uvtile>', '*', in_path, flags=re.IGNORECASE)
+
+  found_token = False
   if '#' in in_path:
-    return re.sub('#+', '*', in_path, flags=re.IGNORECASE)
-  if 'u<u>_v<v>' in in_path.lower():
-    return re.sub('<u>|<v>', '*', in_path, flags=re.IGNORECASE)
-  if '<frame0' in in_path.lower():
-    return re.sub(r'<frame0\d+>', '*', in_path, flags=re.IGNORECASE)
+    in_path = re.sub('#+', '*', in_path, flags=re.IGNORECASE)
+    found_token = True
+  for token in TOKEN_TO_PATTERN_MAP:
+    if token in in_path.lower() and TOKEN_TO_PATTERN_MAP[token] is not None:
+      in_path = re.sub(TOKEN_TO_PATTERN_MAP[token], '*', in_path, flags=re.IGNORECASE)
+      found_token = True
+  if found_token:
+    return in_path
+
   head = os.path.dirname(in_path)
   base = os.path.basename(in_path)
   matches = list(re.finditer(r'\d+', base))
@@ -279,8 +287,7 @@ def get_file_node_path(node):
   # this preserves the <> tag
   if cmds.attributeQuery('computedFileTextureNamePattern', node=node, exists=True):
     textureNamePattern = cmds.getAttr('%s.computedFileTextureNamePattern' % node)
-    if ('<udim>' in textureNamePattern.lower() or '<tile>' in textureNamePattern.lower()
-        or 'u<u>_v<v>' in textureNamePattern or 'u<U>_v<V>' in textureNamePattern):
+    if any(token in textureNamePattern.lower() for token in TOKEN_TO_PATTERN_MAP):
       return cmds.getAttr('%s.computedFileTextureNamePattern' % node)
   # otherwise use fileTextureName
   return cmds.getAttr('%s.fileTextureName' % node)
@@ -298,9 +305,7 @@ def node_uses_image_sequence(node):
   # a <UDIM> token implies a sequence
   node_path = get_file_node_path(node).lower()
   return (cmds.getAttr('%s.useFrameExtension' % node) == True or
-          '<udim>' in node_path or '<tile>' in node_path or '<uvtile>' in node_path or
-          'u<u>_v<v>' in node_path or '<frame0' in node_path or '<attr:' in node_path or
-          '<f>' in node_path)
+      any(token in node_path for token in TOKEN_TO_PATTERN_MAP))
 
 
 def _get_layer_overrides(attr):
@@ -1218,6 +1223,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
   scene_info['files'] = list(set(get_scene_files(frames_to_render)))
   for full_name in extra_assets:
     scene_info['files'].append(full_name.replace('\\', '/'))
+  scene_info['files'] = [_absolutize_path(path) for path in scene_info['files']]
   # Xgen files are already included in the main files list, but we also
   # include them separately so Zync can perform Xgen-related tasks on
   # the much smaller subset
@@ -1338,6 +1344,11 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
 
   return scene_info
 
+
+def _absolutize_path(path):
+  if os.path.isabs(path):
+    return path
+  return os.path.abspath(os.path.join(eval_ui('project', text=True), path))
 
 def _get_bake_set_uvs(bake_set):
   conn_list = cmds.listConnections(bake_set)
