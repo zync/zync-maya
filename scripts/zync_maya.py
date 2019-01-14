@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.48'
+__version__ = '1.4.49'
 
 
 import base64
@@ -1266,7 +1266,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
   if renderer == 'vray':
     print '--> vray version'
     try:
-      scene_info['vray_version'] = str(cmds.pluginInfo('vrayformaya', query=True, version=True))
+      scene_info['vray_version'] = '.'.join(str(cmds.vray('version')).split('.')[0:3])
       scene_info['vray_production_engine_name'] = _get_vray_production_engine_name()
     except Exception as e:
       raise MayaZyncException('Could not detect Vray version. This is required '
