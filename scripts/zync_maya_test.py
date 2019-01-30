@@ -11,6 +11,7 @@ import sys
 import unittest
 
 import zync_maya
+import maya_common
 
 
 class TestMayaScene(unittest.TestCase):
@@ -39,6 +40,7 @@ class TestMayaScene(unittest.TestCase):
     with open(self.info_file) as fp:
       params = json.loads(fp.read())['params']
     scene_info_master = _unicode_to_str(params['scene_info'])
+    zync_maya.renderman.init(params['layers'].split(','), params['camera'])
 
     # Assume the structure is <project folder>/scenes/<scene file>.
     self.maya_cmds.workspace(directory=os.path.dirname(os.path.dirname(self.scene_file)))
@@ -111,7 +113,7 @@ class TestMaya(unittest.TestCase):
     self.assertEqual(
         zync_maya._replace_attr_tokens('/path/to/textures/texture01.jpg'),
         '/path/to/textures/texture01.jpg')
-    with self.assertRaises(zync_maya.MayaZyncException) as _:
+    with self.assertRaises(maya_common.MayaZyncException) as _:
       zync_maya._replace_attr_tokens('<attr:path>/<attr:texture>')
 
   def test_maya_attr_is_true(self):
@@ -170,7 +172,7 @@ class TestMaya(unittest.TestCase):
 
     check = lambda: 'invalid type'
     exception_check = zync_maya.SubmissionCheck(check=check, title='Exception check')
-    with self.assertRaises(zync_maya.ZyncSubmissionCheckError):
+    with self.assertRaises(maya_common.ZyncSubmissionCheckError):
       exception_check.run_check(show_confirmation=False)
 
   def test_replace_tokens_in_file_prefix(self):

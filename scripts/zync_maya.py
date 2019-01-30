@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.49'
+__version__ = '1.4.51'
 
 
 import base64
@@ -30,8 +30,11 @@ import traceback
 import types
 import webbrowser
 
+import maya_common
+import renderman_maya
 
 zync = None
+renderman = renderman_maya.Renderman()
 
 
 VRAY_ENGINE_NAME_CPU = 'cpu'  # 0
@@ -97,14 +100,14 @@ def import_zync_python():
   else:
     config_path = os.path.join(os.path.dirname(__file__), 'config_maya.py')
     if not os.path.exists(config_path):
-      raise MayaZyncException(
+      raise maya_common.MayaZyncException(
         "Plugin configuration incomplete: zync-python path not provided.\n\n"
         "Re-installing the plugin may solve the problem.")
     import imp
     config_maya = imp.load_source('config_maya', config_path)
     API_DIR = config_maya.API_DIR
     if not isinstance(API_DIR, basestring):
-      raise MayaZyncException("API_DIR defined in config_maya.py is not a string")
+      raise maya_common.MayaZyncException("API_DIR defined in config_maya.py is not a string")
 
   sys.path.append(API_DIR)
   import zync
@@ -268,7 +271,7 @@ def _replace_attr_tokens(path):
     return path
   glob_path = re.sub(r'<attr:.*?>', '*', path, flags=re.IGNORECASE)
   if not re.search(r'[^/*]', glob_path):
-    raise MayaZyncException(
+    raise maya_common.MayaZyncException(
         'A file path using attr: tags resolved to %s, which is too wide. '
         'Please use attr: tags only for portions of the file path to limit the '
         'potential matches for these paths; this will help both Arnold and '
@@ -602,79 +605,6 @@ def _vrayScene_handler(node):
           yield file_path
 
 
-def _ribArchive_handler(node):
-  """Handles RIB archive nodes"""
-  archive_path = cmds.getAttr('%s.filename' % node)
-  yield archive_path
-  # determine the name of the RIB archive directory, which matches part
-  # of the basename of the archive path. e.g.:
-  #   archive1.zip: archive name = "archive1"
-  #   archive1.${F4}.rib: archive name also = "archive1"
-  # "rman subst" resolves all placeholders such as frame number. if the
-  # resolved name differs from the original, we assume there's a frame
-  # number chunk at the end of the name we must also drop to arrive at
-  # the archive name.
-  if maya.mel.eval('rman subst "%s"' % archive_path) == archive_path:
-    last_index = -1
-  else:
-    last_index = -2
-  archive_name = '.'.join(os.path.basename(archive_path).split('.')[:last_index])
-  # now we find the archive directory, which contains various materials
-  # associated with the archive. there are a few scenarios...
-  #
-  # use case #1: the RIB archive lives within the archive directory
-  if os.path.basename(os.path.dirname(archive_path)) == archive_name:
-    archive_dir = os.path.dirname(archive_path)
-  # use case #2: RIB archive is a sibling of the archive directory
-  elif os.path.exists(os.path.join(os.path.dirname(archive_path), archive_name)):
-    archive_dir = os.path.join(os.path.dirname(archive_path), archive_name)
-  # use case #3: we couldn't find the archive directory. log a warning and just
-  #              yield the archive itself.
-  else:
-    print 'WARNING: could not locate RIB archive directory for node %s' % node
-    archive_dir = None
-  # Zync prefers file paths rather than directories, so walk the archive
-  # directory and add all child files to the file list
-  if archive_dir:
-    for current_dir, child_dirs, child_files in os.walk(archive_dir):
-      for child_file in child_files:
-        yield os.path.join(current_dir, child_file)
-
-
-def _pxrStdEnvMap_handler(node):
-  """Handles PxrStdEnvMapLight nodes"""
-  yield cmds.getAttr('%s.rman__EnvMap' % node)
-
-
-def _pxrTexture_handler(node):
-  """Handles PxrTexture nodes"""
-  filename = cmds.getAttr('%s.filename' % node)
-  if cmds.getAttr('%s.atlasStyle' % node) == 0:
-    yield filename
-  else:
-    yield re.sub('_MAPID_', '*', filename)
-
-
-def _pxrMultiTexture_handler(node):
-  """Handles PxrMultiTexture nodes"""
-  for texture_id in range(0,10):
-    filename = cmds.getAttr('%s.filename%d' % (node, texture_id))
-    if filename:
-      yield filename
-
-
-def _pxrDomeLight_handler(node):
-  """Handles PxrDomeLight nodes"""
-  filename = cmds.getAttr('%s.lightColorMap' % node)
-  if filename:
-    yield filename
-
-
-def _rmsEnvLight_handler(node):
-  """Handles RMSEnvLight nodes"""
-  yield cmds.getAttr('%s.rman__EnvMap' % node)
-
-
 def _openVDBRead_handler(node):
   """Handles OpenVDBRead nodes"""
   yield cmds.getAttr('%s.file' % node)
@@ -690,14 +620,6 @@ def _mash_handler(node):
   if archive_paths:
     for archive_path in archive_paths.split(','):
       yield archive_path
-
-
-def _pxrPtexture_handler(node):
-  yield cmds.getAttr('%s.filename' % node)
-
-
-def _pxrNormalMap_handler(node):
-  yield cmds.getAttr('%s.filename' % node)
 
 
 def _mashAudio_handler(node):
@@ -724,7 +646,7 @@ def _bifrost_handler(frames_to_render, bifrost_container):
           yield cache_file
 
 
-def get_scene_files(frames_to_render):
+def get_scene_files(frames_to_render, renderer):
   """Returns all of the files being used by the scene"""
   file_types = {
     'file': _file_handler,
@@ -752,22 +674,24 @@ def get_scene_files(frames_to_render):
     'VRayPtex': _vrayPtex_handler,
     'VRayVolumeGrid': _vrayVolumeGrid_handler,
     'VRayScene': _vrayScene_handler,
-    'RenderManArchive': _ribArchive_handler,
-    'PxrStdEnvMapLight': _pxrStdEnvMap_handler,
-    'PxrTexture': _pxrTexture_handler,
-    'PxrBump': _pxrTexture_handler, # PxrBump and PxrTexture are identical.
-    'PxrMultiTexture': _pxrMultiTexture_handler,
-    'PxrDomeLight': _pxrDomeLight_handler,
-    'RMSEnvLight': _rmsEnvLight_handler,
+    'RenderManArchive': renderman.ribArchive_handler,
+    'PxrStdEnvMapLight': renderman.pxrStdEnvMap_handler,
+    'PxrDomeLight': renderman.pxrDomeLight_handler,
+    'PxrTexture': renderman.pxrTexture_handler,
+    'PxrBump': renderman.pxrTexture_handler, # PxrBump and PxrTexture are identical.
+    'PxrMultiTexture': renderman.pxrMultiTexture_handler,
+    'PxrDomeLight': renderman.pxrDomeLight_handler,
+    'RMSEnvLight': renderman.rmsEnvLight_handler,
+    'PxrPtexture': renderman.pxrPtexture_handler,
+    'PxrNormalMap': renderman.pxrNormalMap_handler,
     'OpenVDBRead': _openVDBRead_handler,
     'aiVolume': _aiVolume_handler,
     'MASH_Waiter': _mash_handler,
-    'PxrPtexture': _pxrPtexture_handler,
-    'PxrNormalMap': _pxrNormalMap_handler,
     'MASH_Audio': _mashAudio_handler,
     'bifrostContainer': functools.partial(_bifrost_handler, frames_to_render),
   }
 
+  # Handles direct dependencies
   for file_type in file_types:
     handler = file_types.get(file_type)
     nodes = cmds.ls(type=file_type)
@@ -777,6 +701,12 @@ def get_scene_files(frames_to_render):
           scene_file = scene_file.replace('\\', '/')
           print 'found file dependency from %s node %s: %s' % (file_type, node, scene_file)
           yield scene_file
+
+  # Handles recursive dependencies
+  if not eval_ui('ignore_second_deps', 'checkBox', v=True):
+    if renderer == 'renderman':
+      for file in renderman.parse_rib_archives():
+        yield file
 
   try:
     for xgen_file in get_xgen_files():
@@ -1051,31 +981,6 @@ def get_maya_version():
     version_rounded = int(version_rounded)
   return str(version_rounded)
 
-
-def _rman_translate_format_to_extension(image_format):
-  """Translate an image format to the extension of files it
-  generates. For example, "openexr" becomes "exr".
-
-  Args:
-    image_format: str, the image format
-
-  Returns:
-    str, the output extension. If the format is unrecognized, the
-    original image format will be returned.
-  """
-  # rman getPref returns a flat string where even items are format
-  # names and odd indexes are file extensions. like:
-  # "openexr exr softimage pic shader slo"
-  formats_list = maya.mel.eval("rman getPref AssetnameExtTable;").split()
-  # look for the format, then return the next item in the string
-  # if the format isn't found, return it as is.
-  try:
-    format_index = formats_list.index(image_format)
-  except ValueError:
-    return image_format
-  return formats_list[format_index+1]
-
-
 def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_render):
   """Returns scene info for the current scene.
 
@@ -1085,7 +990,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
     layers_to_render: [str], list of render layers that will be rendered
     is_bake: bool, whether job is a bake job
     extra_assets: [str], list of any extra files to include
-    frames_to_render: [int], list of each frame to be rendered.
+    frames_to_render: [int], list of each frame to be rendered
 
   Returns:
     dict of scene information
@@ -1186,8 +1091,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
     if cmds.getAttr('defaultRenderGlobals.outFormatControl'):
       scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.outFormatExt').lstrip('.')
     else:
-      scene_info['extension'] = _rman_translate_format_to_extension(
-          cmds.getAttr('rmanFinalOutputGlobals0.rman__riopt__Display_type'))
+      scene_info['extension'] = renderman.get_extension()
     scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
   scene_info['extension'] = scene_info['extension'][:3]
 
@@ -1220,7 +1124,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
   scene_info['file_prefix'].append(layer_prefixes)
 
   print '--> files'
-  scene_info['files'] = list(set(get_scene_files(frames_to_render)))
+  scene_info['files'] = list(set(get_scene_files(frames_to_render, renderer)))
   for full_name in extra_assets:
     scene_info['files'].append(full_name.replace('\\', '/'))
   scene_info['files'] = [_absolutize_path(path) for path in scene_info['files']]
@@ -1269,7 +1173,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
       scene_info['vray_version'] = '.'.join(str(cmds.vray('version')).split('.')[0:3])
       scene_info['vray_production_engine_name'] = _get_vray_production_engine_name()
     except Exception as e:
-      raise MayaZyncException('Could not detect Vray version. This is required '
+      raise maya_common.MayaZyncException('Could not detect Vray version. This is required '
                               'to render Vray jobs. Do you have the Vray '
                               'plugin loaded?')
 
@@ -1279,18 +1183,16 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
     try:
       scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True))
     except Exception as e:
-      raise MayaZyncException('Could not detect Arnold version. This is '
+      raise maya_common.MayaZyncException('Could not detect Arnold version. This is '
                               'required to render Arnold jobs. Do you have the '
                               'Arnold plugin loaded?')
 
   if renderer == 'renderman':
     print '--> renderman version'
     try:
-      # Zync needs the prman version, not the RfM plugin version. until recently
-      # these were not synchronized. prman version comes back like "prman 20.7 @1571626"
-      scene_info['renderman_version'] = str(maya.mel.eval('rman getversion prman').split()[1])
+      scene_info['renderman_version'] = renderman.get_version()
     except Exception as e:
-      raise MayaZyncException('Could not detect Renderman version. This is '
+      raise maya_common.MayaZyncException('Could not detect Renderman version. This is '
                               'required to render Renderman jobs. Do you have '
                               'the Renderman plugin loaded?')
 
@@ -1483,24 +1385,6 @@ def extract_frame_number_from_file_path(file_path):
   return None
 
 
-class MayaZyncException(Exception):
-  pass
-
-
-class ZyncAbortedByUser(Exception):
-  """
-  Exception to handle user's decision about canceling a process.
-  """
-  pass
-
-
-class ZyncSubmissionCheckError(Exception):
-  """
-  Exception to handle errors when trying to run a SubmissionCheck.
-  """
-  pass
-
-
 class SubmissionCheck(object):
   """
   Manages the running of submission checks and display of confirmation dialogs.
@@ -1544,7 +1428,7 @@ class SubmissionCheck(object):
       cancelButton=self.cancel_msg,
       icon='warning')
     if response != self.confirm_msg:
-      raise ZyncAbortedByUser('Aborted by user')
+      raise maya_common.ZyncAbortedByUser('Aborted by user')
 
   def run_check(self, show_confirmation=True):
     """
@@ -1561,12 +1445,12 @@ class SubmissionCheck(object):
     try:
       check_return = self.check(*self.check_args, **self.check_kwargs)
     except Exception, e:
-      raise ZyncSubmissionCheckError('{}: {}'.format(self.title, e.message))
+      raise maya_common.ZyncSubmissionCheckError('{}: {}'.format(self.title, e.message))
     if not isinstance(check_return, bool):
-      raise ZyncSubmissionCheckError('{}: Invalid check. Did not return a boolean.'.format(self.title))
+      raise maya_common.ZyncSubmissionCheckError('{}: Invalid check. Did not return a boolean.'.format(self.title))
     if check_return:
       if self.always_fail:
-        raise ZyncSubmissionCheckError(self.message)
+        raise maya_common.ZyncSubmissionCheckError(self.message)
       elif show_confirmation:
         self.confirm_or_abort()
     return check_return
@@ -1587,7 +1471,7 @@ class SubmitWindow(object):
 
     scene_name = cmds.file(q=True, loc=True)
     if scene_name == 'unknown':
-      raise MayaZyncException('Please save your script before launching a job.')
+      raise maya_common.MayaZyncException('Please save your script before launching a job.')
 
     # this will perform the Google OAuth flow so future API requests
     # will be authenticated
@@ -1615,6 +1499,7 @@ class SubmitWindow(object):
     self.notify_complete = 0
     self.vray_nightly = 0
     self.use_standalone = 0
+    self.ignore_second_deps = 0
     self.distributed = 0
     self.ignore_plugin_errors = 0
     self.login_type = 'zync'
@@ -1781,6 +1666,7 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
+      cmds.checkBox('ignore_second_deps', e=True, vis=False)
     elif renderer.lower() == 'arnold':
       renderer_key = 'arnold'
       cmds.checkBox('vray_nightly', e=True, en=False)
@@ -1788,6 +1674,7 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
+      cmds.checkBox('ignore_second_deps', e=True, vis=False)
     elif renderer.lower() == 'renderman':
       renderer_key = 'renderman'
       cmds.checkBox('vray_nightly', e=True, en=False)
@@ -1795,8 +1682,10 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, label='Use Standalone')
+      cmds.checkBox('use_standalone', e=True, label='Use Standalone')
+      cmds.checkBox('ignore_second_deps', e=True, vis=True)
     else:
-      raise MayaZyncException('Unrecognized renderer "%s".' % renderer)
+      raise maya_common.MayaZyncException('Unrecognized renderer "%s".' % renderer)
     cmds.checkBox('vray_nightly', e=True, v=False)
     cmds.checkBox('distributed', e=True, v=False)
     cmds.textField('chunk_size', e=True, en=True)
@@ -1923,7 +1812,7 @@ class SubmitWindow(object):
     if cmds.radioButton('existing_project', q=True, sl=True) == True:
       proj_name = eval_ui('existing_project_name', 'optionMenu', v=True)
       if proj_name == None or proj_name.strip() == '':
-        raise MayaZyncException('Your project name cannot be blank. Please '
+        raise maya_common.MayaZyncException('Your project name cannot be blank. Please '
                                 'select New Project and enter a name.')
     else:
       proj_name = eval_ui('new_project_name', text=True)
@@ -1960,7 +1849,7 @@ class SubmitWindow(object):
     selected_type = self.zync_conn.machine_type_from_label(
         eval_ui('instance_type', 'optionMenu', v=True), params['renderer'] + '-maya')
     if not selected_type:
-      raise MayaZyncException('Unknown instance type selected: %s' % selected_type)
+      raise maya_common.MayaZyncException('Unknown instance type selected: %s' % selected_type)
     params['instance_type'] = selected_type
 
     params['frange'] = eval_ui('frange', text=True)
@@ -1972,7 +1861,7 @@ class SubmitWindow(object):
 
     params['camera'] = eval_ui('camera', 'optionMenu', v=True)
     if not params['camera']:
-      raise MayaZyncException('Please select a render camera. If the list is '
+      raise maya_common.MayaZyncException('Please select a render camera. If the list is '
                               'empty, try adding a renderable camera in your '
                               'scene render settings.')
 
@@ -1999,20 +1888,20 @@ class SubmitWindow(object):
     elif params['job_subtype'] == 'bake':
       bake_sets = eval_ui('layers', 'textScrollList', ai=True, si=True)
       if not bake_sets:
-        raise MayaZyncException('Please select bake set(s).')
+        raise maya_common.MayaZyncException('Please select bake set(s).')
       bake_sets = ','.join(bake_sets)
       params['bake_sets'] = bake_sets
       params['layers'] = None
     else:
       layers = eval_ui('layers', 'textScrollList', ai=True, si=True)
       if not layers:
-        raise MayaZyncException('Please select layer(s) to render.')
+        raise maya_common.MayaZyncException('Please select layer(s) to render.')
       layers = ','.join(layers)
       params['layers'] = layers
       params['bake_sets'] = None
 
     if params['distributed'] and 'PREEMPTIBLE' in selected_type:
-      raise MayaZyncException('Distributed rendering jobs cannot use preemptible instances.')
+      raise maya_common.MayaZyncException('Distributed rendering jobs cannot use preemptible instances.')
 
     return params
 
@@ -2023,7 +1912,7 @@ class SubmitWindow(object):
         raise ValueError
       return step
     except ValueError:
-      raise MayaZyncException('Zync only supports whole numbers >=1 for Frame Step.')
+      raise maya_common.MayaZyncException('Zync only supports whole numbers >=1 for Frame Step.')
 
   @show_exceptions
   def show(self):
@@ -2093,8 +1982,8 @@ class SubmitWindow(object):
       key = 'vray'
     elif current_renderer == 'arnold':
       key = 'arnold'
-    # handle 'renderMan' and 'renderManRIS'
-    elif current_renderer.startswith('renderMan'):
+    # handle 'renderman', renderMan' and 'renderManRIS'
+    elif current_renderer.lower().startswith('renderman'):
       key = 'renderman'
     else:
       key = 'vray'
@@ -2138,7 +2027,7 @@ class SubmitWindow(object):
     # renderman doesn't use standard project settings, it has its own
     # preference.
     if self.get_renderer() == 'renderman':
-      default_output_dir = maya.mel.eval('rmanGetDir rfmImages')
+      default_output_dir = renderman.get_output_dir()
     else:
       # the project settings define where that project's rendered images should
       # go. get this project setting, defaulting to "images" if it's not found
@@ -2296,7 +2185,7 @@ class SubmitWindow(object):
   def submit(self):
     """Submit a job to Zync."""
     if not self.zync_conn.has_user_login():
-      raise MayaZyncException('You must login before submitting a new job.')
+      raise maya_common.MayaZyncException('You must login before submitting a new job.')
 
     job_uses_standalone = (not self.is_maya_io or eval_ui('use_standalone', 'checkBox', v=True))
 
@@ -2320,7 +2209,11 @@ class SubmitWindow(object):
       proj_name = eval_ui('new_project_name', text=True)
       extra_assets = file_select_dialog.FileSelectDialog.get_extra_assets(proj_name)
       if not extra_assets:
-        raise MayaZyncException('No extra assets selected')
+        raise maya_common.MayaZyncException('No extra assets selected')
+
+    layers_to_render = (params['layers'].split(',') if params['layers'] else None)
+    if params['renderer'] == 'renderman':
+      renderman.init(layers_to_render, params['camera'])
 
     submission_checks = [
       SubmissionCheck(
@@ -2354,11 +2247,11 @@ class SubmitWindow(object):
     print 'Collecting scene info...'
     try:
       params['scene_info'] = get_scene_info(params['renderer'],
-          (params['layers'].split(',') if params['layers'] else None),
+          layers_to_render,
           (eval_ui('job_type', ui_type='optionMenu', v=True).lower() == 'bake'),
           extra_assets if params['sync_extra_assets'] else [],
           parse_frame_range(params['frange']))
-    except ZyncAbortedByUser:
+    except maya_common.ZyncAbortedByUser:
       # If the job is aborted just finish the submit function
       return
 
@@ -2389,7 +2282,7 @@ class SubmitWindow(object):
         elif params['renderer'] == 'arnold':
           self._submit_arnold_job(layer_list, params, sf, ef)
         else:
-          raise MayaZyncException('Renderer %s unsupported for standalone rendering.' % params['renderer'])
+          raise maya_common.MayaZyncException('Renderer %s unsupported for standalone rendering.' % params['renderer'])
 
         cmds.confirmDialog(title='Success',
           message='{num_jobs} {label} submitted to Zync.'.format(
@@ -2413,7 +2306,7 @@ class SubmitWindow(object):
         if (cmds.objExists('vraySettings') and
             cmds.attributeQuery('vrscene_on', node='vraySettings', exists=True) and
             cmds.getAttr('vraySettings.vrscene_on')):
-          raise MayaZyncException('You have "Export to a .vrscene file" turned '
+          raise maya_common.MayaZyncException('You have "Export to a .vrscene file" turned '
                                   'on. This will cause Vray to attempt a scene '
                                   'export rather than a render. Please disable '
                                   'this option before submitting this scene to '
@@ -2437,7 +2330,7 @@ class SubmitWindow(object):
 
   def verify_vray_production_engine(self):
     if self.vray_production_engine_name not in [VRAY_ENGINE_NAME_CPU, VRAY_ENGINE_NAME_CUDA]:
-      raise MayaZyncException('Current V-Ray production engine is not supported by Zync. '
+      raise maya_common.MayaZyncException('Current V-Ray production engine is not supported by Zync. '
                               'Please go to Render Settings -> VRay tab to change it to CPU or CUDA')
 
   @staticmethod
@@ -2735,9 +2628,9 @@ def replace_tokens_in_file_prefix(file_prefix, scene_name, layer, camera):
       str, token replaced file prefix.
   """
   mappings = (
-    (_SUBSTITUTE_SCENE_TOKEN_RE, scene_name),
-    (_SUBSTITUTE_LAYER_TOKEN_RE, layer),
-    (_SUBSTITUTE_CAMERA_TOKEN_RE, camera),
+    (maya_common._SUBSTITUTE_SCENE_TOKEN_RE, scene_name),
+    (maya_common._SUBSTITUTE_LAYER_TOKEN_RE, layer),
+    (maya_common._SUBSTITUTE_CAMERA_TOKEN_RE, camera),
   )
   for regex, value in mappings:
     file_prefix = re.sub(regex, value, file_prefix)
@@ -2760,10 +2653,10 @@ def output_has_layer_problems(renderer, layer_list):
   try:
     output_prefix = cmds.getAttr(NamePrefixAttributes.get_prefix(renderer))
   except AttributeError:
-    raise MayaZyncException('Renderer %s unsupported for rendering.' % renderer)
+    raise maya_common.MayaZyncException('Renderer %s unsupported for rendering.' % renderer)
   if output_prefix is None:
     return False
-  return len(layer_list) > 1 and not re.match(_HAS_LAYER_TOKEN_RE, output_prefix)
+  return len(layer_list) > 1 and not re.match(maya_common._HAS_LAYER_TOKEN_RE, output_prefix)
 
 
 def show_update_notification():

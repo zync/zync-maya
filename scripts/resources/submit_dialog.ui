@@ -94,7 +94,7 @@
          <property name="bottomMargin">
           <number>10</number>
          </property>
-         <item row="22" column="1">
+         <item row="23" column="1">
           <widget class="QLineEdit" name="frame_step">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -128,6 +128,39 @@
              </property>
              <property name="-v" stdset="0">
               <string>`python &quot;cmds.submit_callb('use_standalone')&quot;`</string>
+             </property>
+            </widget>
+           </item>
+           <item>
+            <spacer name="horizontalSpacer">
+             <property name="orientation">
+              <enum>Qt::Horizontal</enum>
+             </property>
+             <property name="sizeType">
+              <enum>QSizePolicy::Fixed</enum>
+             </property>
+             <property name="sizeHint" stdset="0">
+              <size>
+               <width>80</width>
+               <height>20</height>
+              </size>
+             </property>
+            </spacer>
+           </item>
+          </layout>
+         </item>
+         <item row="21" column="1">
+          <layout class="QHBoxLayout" name="horizontalLayout_3">
+           <item>
+            <widget class="QCheckBox" name="ignore_second_deps">
+             <property name="toolTip">
+              <string>If selected, will not parse .rib files for dependencies.</string>
+             </property>
+             <property name="text">
+              <string>Ignore second level dependencies</string>
+             </property>
+             <property name="-v" stdset="0">
+              <string>`python &quot;cmds.submit_callb('ignore_second_deps')&quot;`</string>
              </property>
             </widget>
            </item>
@@ -185,7 +218,7 @@
            </item>
           </layout>
          </item>
-         <item row="24" column="0">
+         <item row="25" column="0">
           <widget class="QLabel" name="label_10">
            <property name="font">
             <font>
@@ -200,7 +233,7 @@
            </property>
           </widget>
          </item>
-         <item row="26" column="1">
+         <item row="27" column="1">
           <layout class="QHBoxLayout" name="horizontalLayout">
            <property name="spacing">
             <number>6</number>
@@ -313,7 +346,7 @@
            </item>
           </layout>
          </item>
-         <item row="24" column="1">
+         <item row="25" column="1">
           <widget class="QComboBox" name="camera">
            <property name="font">
             <font>
@@ -401,7 +434,7 @@
            </item>
           </layout>
          </item>
-         <item row="22" column="0">
+         <item row="23" column="0">
           <widget class="QLabel" name="label_8">
            <property name="font">
             <font>
@@ -498,7 +531,7 @@
            </property>
           </widget>
          </item>
-         <item row="23" column="1">
+         <item row="24" column="1">
           <widget class="QLineEdit" name="chunk_size">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -519,7 +552,7 @@
            </property>
           </widget>
          </item>
-         <item row="23" column="0">
+         <item row="24" column="0">
           <widget class="QLabel" name="label_9">
            <property name="font">
             <font>
@@ -551,7 +584,7 @@
            </property>
           </widget>
          </item>
-         <item row="21" column="0">
+         <item row="22" column="0">
           <widget class="QLabel" name="frange_label">
            <property name="font">
             <font>
@@ -566,7 +599,7 @@
            </property>
           </widget>
          </item>
-         <item row="25" column="0">
+         <item row="26" column="0">
           <widget class="QLabel" name="layers_label">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
@@ -633,7 +666,7 @@
            </item>
           </layout>
          </item>
-         <item row="21" column="1">
+         <item row="22" column="1">
           <widget class="QLineEdit" name="frange">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -654,7 +687,7 @@
            </property>
           </widget>
          </item>
-         <item row="26" column="0">
+         <item row="27" column="0">
           <widget class="QLabel" name="label_12">
            <property name="font">
             <font>
@@ -920,7 +953,7 @@
            </property>
           </widget>
          </item>
-         <item row="25" column="1">
+         <item row="26" column="1">
           <widget class="QListWidget" name="layers">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Preferred" vsizetype="Preferred">
@@ -1296,6 +1329,8 @@
   <tabstop>job_type</tabstop>
   <tabstop>vray_nightly</tabstop>
   <tabstop>distributed</tabstop>
+  <tabstop>use_standalone</tabstop>
+  <tabstop>ignore_second_deps</tabstop>
   <tabstop>frange</tabstop>
   <tabstop>frame_step</tabstop>
   <tabstop>chunk_size</tabstop>
