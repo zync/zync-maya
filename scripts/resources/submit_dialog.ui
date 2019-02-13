@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <ui version="4.0">
- <class>SubmitDialog</class>
- <widget class="QDialog" name="SubmitDialog">
+ <class>ZyncSubmitDialog</class>
+ <widget class="QDialog" name="ZyncSubmitDialog">
   <property name="geometry">
    <rect>
     <x>0</x>
@@ -102,7 +102,6 @@
              <verstretch>0</verstretch>
             </sizepolicy>
            </property>
-
            <property name="font">
             <font>
              <pointsize>10</pointsize>

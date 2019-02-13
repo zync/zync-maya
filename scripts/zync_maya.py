@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.51'
+__version__ = '1.4.53'
 
 
 import base64
@@ -1549,10 +1549,10 @@ class SubmitWindow(object):
     cmds.logout_callb = self.logout
 
     #
-    #  Delete the "SubmitDialog" window if it exists.
+    #  Delete the "ZyncSubmitDialog" window if it exists.
     #
-    if cmds.window('SubmitDialog', q=True, ex=True):
-      cmds.deleteUI('SubmitDialog')
+    if cmds.window('ZyncSubmitDialog', q=True, ex=True):
+      cmds.deleteUI('ZyncSubmitDialog')
 
     #
     #  Load the UI file. See the init_* functions below for more info on
@@ -1560,7 +1560,9 @@ class SubmitWindow(object):
     #
     name = cmds.loadUI(f=ui_file)
 
-    cmds.window(name, e=True, title=self.title)
+    # If topLeftCorner is unspecified, Maya 2019 puts the dialog in the top-left corner
+    # of the screen in a way that makes title bar invisible
+    cmds.window(name, e=True, title=self.title, topLeftCorner=(50, 50))
 
     #
     #  Callbacks - set up functions to be called as UI elements are modified.

@@ -122,6 +122,9 @@ class Renderman(object):
   def parse_rib_archives(self):
     queue = Queue()
     self._enqueue_rib_files(queue)
+    if queue.empty():
+      return
+
     for file in self._process_rib_queue(queue):
       yield file
 
