@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.53'
+__version__ = '1.4.54'
 
 
 import base64
@@ -2519,6 +2519,10 @@ class SubmitWindow(object):
     layer_file = '%s_%s_%s%s' % (ass_base, layer, layer_mangled, ext)
     layer_file_wildcard = '%s_%s*%s' % (ass_base, layer, ext)
 
+    # Override renderSetup options to keep exported *.ass files names consistent
+    # with what backend expects (filename.framenumber.ext), see b/128825029
+    maya.cmds.setAttr('defaultRenderGlobals.putFrameBeforeExt', 1)
+    maya.cmds.setAttr('defaultRenderGlobals.periodInExt', 1)
     ass_cmd = ('arnoldExportAss -f "%s" -endFrame %s -mask 255 ' % (layer_file, end_frame) +
       '-lightLinks 1 -frameStep %d.0 -startFrame %s ' % (render_params['step'], start_frame) +
       '-shadowLinks 1 -cam %s' % (params['camera'],))
