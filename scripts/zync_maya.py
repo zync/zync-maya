@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.4.54'
+__version__ = '1.4.55'
 
 
 import base64
@@ -1196,11 +1196,13 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
                               'required to render Renderman jobs. Do you have '
                               'the Renderman plugin loaded?')
 
-  # If this is an Arnold job and AOVs are on, include a list of AOV
-  # names in scene_info. If "Merge AOVs" is on, i.e. multichannel EXRs,
-  # the AOVs will be rendered in a single image, so consider AOVs to be
-  # OFF for purposes of the Zync job.
   if renderer == 'arnold':
+    _check_arnold_gpu()
+
+    # If this is an Arnold job and AOVs are on, include a list of AOV
+    # names in scene_info. If "Merge AOVs" is on, i.e. multichannel EXRs,
+    # the AOVs will be rendered in a single image, so consider AOVs to be
+    # OFF for purposes of the Zync job.
     try:
       aov_on = (cmds.getAttr('defaultArnoldRenderOptions.aovMode') and
         not cmds.getAttr('defaultArnoldDriver.mergeAOVs'))
@@ -1246,6 +1248,19 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
 
   return scene_info
 
+def _check_arnold_gpu():
+  try:
+    renderDevice = cmds.getAttr('defaultArnoldRenderOptions.renderDevice')
+  except:
+    renderDevice = 0
+
+  SubmissionCheck(
+      check=lambda: (renderDevice != 0 and renderDevice != '0'),
+      title='GPU rendering not supported',
+      always_fail=True,
+      message='Zync does not currently support GPU rendering for Arnold. '
+              'Please change render device to CPU in render settings.',
+  ).run_check()
 
 def _absolutize_path(path):
   if os.path.isabs(path):
