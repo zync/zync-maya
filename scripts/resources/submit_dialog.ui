@@ -94,7 +94,7 @@
          <property name="bottomMargin">
           <number>10</number>
          </property>
-         <item row="23" column="1">
+         <item row="22" column="1">
           <widget class="QLineEdit" name="frame_step">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -115,7 +115,7 @@
            </property>
           </widget>
          </item>
-         <item row="20" column="1">
+         <item row="19" column="1">
           <layout class="QHBoxLayout" name="horizontalLayout_3">
            <item>
             <widget class="QCheckBox" name="use_standalone">
@@ -148,7 +148,7 @@
            </item>
           </layout>
          </item>
-         <item row="21" column="1">
+         <item row="20" column="1">
           <layout class="QHBoxLayout" name="horizontalLayout_3">
            <item>
             <widget class="QCheckBox" name="ignore_second_deps">
@@ -183,22 +183,6 @@
          </item>
          <item row="19" column="1">
           <layout class="QHBoxLayout" name="horizontalLayout_12">
-           <item>
-            <widget class="QCheckBox" name="distributed">
-             <property name="sizePolicy">
-              <sizepolicy hsizetype="Minimum" vsizetype="Fixed">
-               <horstretch>0</horstretch>
-               <verstretch>0</verstretch>
-              </sizepolicy>
-             </property>
-             <property name="text">
-              <string>Distributed Rendering</string>
-             </property>
-             <property name="-v" stdset="0">
-              <string>`python &quot;cmds.submit_callb('distributed')&quot;`</string>
-             </property>
-            </widget>
-           </item>
            <item>
             <spacer name="horizontalSpacer_12">
              <property name="orientation">
@@ -433,7 +417,7 @@
            </item>
           </layout>
          </item>
-         <item row="23" column="0">
+         <item row="22" column="0">
           <widget class="QLabel" name="label_8">
            <property name="font">
             <font>
@@ -445,6 +429,42 @@
            </property>
            <property name="alignment">
             <set>Qt::AlignRight|Qt::AlignTrailing|Qt::AlignVCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item row="24" column="0">
+          <widget class="QLabel" name="label_num_tiles">
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>Number of Tiles per Frame:</string>
+           </property>
+           <property name="alignment">
+            <set>Qt::AlignLeft|Qt::AlignTrailing|Qt::AlignVCenter</set>
+           </property>
+          </widget>
+         </item>
+         <item row="24" column="1">
+          <widget class="QLineEdit" name="num_tiles">
+           <property name="sizePolicy">
+            <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
+             <horstretch>0</horstretch>
+             <verstretch>0</verstretch>
+            </sizepolicy>
+           </property>
+           <property name="font">
+            <font>
+             <pointsize>10</pointsize>
+            </font>
+           </property>
+           <property name="text">
+            <string>1</string>
+           </property>
+           <property name="-tx" stdset="0">
+            <string>`python &quot;cmds.submit_callb('num_tiles')&quot;`</string>
            </property>
           </widget>
          </item>
@@ -530,7 +550,7 @@
            </property>
           </widget>
          </item>
-         <item row="24" column="1">
+         <item row="23" column="1">
           <widget class="QLineEdit" name="chunk_size">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -551,7 +571,7 @@
            </property>
           </widget>
          </item>
-         <item row="24" column="0">
+         <item row="23" column="0">
           <widget class="QLabel" name="label_9">
            <property name="font">
             <font>
@@ -583,7 +603,7 @@
            </property>
           </widget>
          </item>
-         <item row="22" column="0">
+         <item row="21" column="0">
           <widget class="QLabel" name="frange_label">
            <property name="font">
             <font>
@@ -665,7 +685,7 @@
            </item>
           </layout>
          </item>
-         <item row="22" column="1">
+         <item row="21" column="1">
           <widget class="QLineEdit" name="frange">
            <property name="sizePolicy">
             <sizepolicy hsizetype="Maximum" vsizetype="Fixed">
@@ -1327,8 +1347,8 @@
   <tabstop>renderer</tabstop>
   <tabstop>job_type</tabstop>
   <tabstop>vray_nightly</tabstop>
-  <tabstop>distributed</tabstop>
   <tabstop>use_standalone</tabstop>
+  <tabstop>num_tiles</tabstop>
   <tabstop>ignore_second_deps</tabstop>
   <tabstop>frange</tabstop>
   <tabstop>frame_step</tabstop>

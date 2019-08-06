@@ -14,13 +14,14 @@ Usage:
 
 """
 
-__version__ = '1.4.55'
+__version__ = '1.5.3'
 
 
 import base64
 import copy
 import functools
 import glob
+import itertools
 import math
 import os
 import re
@@ -36,29 +37,42 @@ import renderman_maya
 zync = None
 renderman = renderman_maya.Renderman()
 
-
 VRAY_ENGINE_NAME_CPU = 'cpu'  # 0
 VRAY_ENGINE_NAME_OPENCL = 'opencl'  # 1
 VRAY_ENGINE_NAME_CUDA = 'cuda'  # 2
 VRAY_ENGINE_NAME_UNKNOWN = 'unknown'
 RENDER_LABEL_VRAY_CUDA = 'V-Ray (CUDA)'
 
+RENDERER_NAMES = {
+    'vray': 'V-Ray',
+    'arnold': 'Arnold',
+    'renderman': 'Renderman',
+    'redshift': 'Redshift',
+}
+
 TOKEN_TO_PATTERN_MAP = {
     '<f>': '<f>',
+    '<layer>': '<layer>',
     '<udim>': '<udim>',
     '<tile>': '<tile>',
     '<uvtile>': '<uvtile>',
     'u<u>_v<v>': '<u>|<v>',
     '<u>_<v>': '<u>|<v>',
     '<frame0': r'<frame0\d+>',
-    '<attr:': None
+    '<frame>': '<frame>',
+    '<attr:': None,
+    '<shapename>': '<shapename>',
 }
+
+REDSHIFT_CACHE_ATTRIBUTES = ['irradianceCacheFilename', 'irradiancePointCloudFilename', 'photonFilename', 'subsurfaceScatteringFilename']
+REDSHIFT_OCIO_ATTRIBUTES = ['clrMgmtOcioFilename', 'lutFilename']
 
 class NamePrefixAttributes(object):
   arnold = 'defaultRenderGlobals.imageFilePrefix'
   sw = 'defaultRenderGlobals.imageFilePrefix'
   mr = 'defaultRenderGlobals.imageFilePrefix'
   vray = 'vraySettings.fileNamePrefix'
+  redshift = 'defaultRenderGlobals.imageFilePrefix'
 
   @classmethod
   def get_prefix(cls, renderer):
@@ -355,16 +369,11 @@ def _file_handler(node):
   # if the Arnold "Use .tx" flag is on, look for a .tx version
   # of the texture as well
   try:
-    arnold_use_tx = cmds.getAttr('defaultArnoldRenderOptions.use_existing_tiled_textures')
+    if cmds.getAttr('defaultArnoldRenderOptions.use_existing_tiled_textures'):
+      head, _ = os.path.splitext(texture_path)
+      yield '%s.tx' % head
   except:
-    arnold_use_tx = False
-  if arnold_use_tx:
-    try:
-      head, ext = os.path.splitext(texture_path)
-      tx_path = '%s.tx' % head
-      yield tx_path
-    except:
-      pass
+    pass
   # look for layer overrides set on the path
   for override_path in _get_layer_overrides('%s.fileTextureName' % node):
     yield override_path
@@ -646,7 +655,90 @@ def _bifrost_handler(frames_to_render, bifrost_container):
           yield cache_file
 
 
+def get_redshift_version():
+  return str(cmds.pluginInfo('redshift4maya', query=True, version=True))
+
+
+def generate_redshift_asset_paths():
+  for path in cmds.file(q=True, list=True):
+    yield seq_to_glob(path)
+
+  for path in generate_redshift_layer_overriden_paths('RedshiftOptions', REDSHIFT_CACHE_ATTRIBUTES):
+    yield path
+
+  for path in generate_redshift_layer_overriden_paths('RedshiftPostEffects', REDSHIFT_OCIO_ATTRIBUTES):
+    yield path
+
+
+def generate_redshift_layer_overriden_paths(node_type, attributes):
+  for node in cmds.ls(type=node_type):
+    for attr in attributes:
+      for layer in get_render_layers():
+        path = get_layer_override(layer, 'redshift', '%s.%s' % (node, attr))
+        yield seq_to_glob(path)
+
+
+def generate_redshift_second_order_dependency_paths(frame_numbers):
+  for proxy_node in cmds.ls(type='RedshiftProxyMesh'):
+    proxy_path = cmds.getAttr('%s.computedFileNamePattern' % proxy_node)
+    if cmds.getAttr('%s.useFrameExtension' % proxy_node):
+      proxy_paths = [replace_frame_number(proxy_path, frame) for frame in frame_numbers]
+    else:
+      proxy_paths = [proxy_path]
+    for path in proxy_paths:
+      for proxy_asset in maya.mel.eval('rsProxy -q -dependencies "%s"' % path):
+        yield _clean_path(proxy_asset)
+
+
+def replace_frame_number(path, frame_number):
+  frame_number = int(frame_number)
+  if frame_number < 0:
+    raise ValueError("Frame number must be non-negative")
+
+  def split_by_token(_path):
+    return re.split('(#+)', _path)
+
+  def is_token(_part):
+    return '#' in _part
+
+  def replace_token(_path, _frame_number):
+    _frame_number = str(_frame_number)
+    if len(_frame_number) >= len(_path):
+      return _frame_number
+    num_of_zeroes = len(_path) - len(_frame_number)
+    return (num_of_zeroes*'0') + _frame_number
+
+  parts = split_by_token(path)
+  final_path = ""
+  for part in parts:
+    final_part = part
+    if is_token(part):
+      final_part = replace_token(part, frame_number)
+    final_path += final_part
+  return final_path
+
+
 def get_scene_files(frames_to_render, renderer):
+  generator = itertools.chain()
+  # Generate asset paths
+  if renderer == 'redshift':
+    generator = itertools.chain(generator, generate_redshift_asset_paths())
+  else:
+    generator = itertools.chain(generator, generate_asset_paths(frames_to_render))
+
+  # Generate recursive dependency paths
+  if not eval_ui('ignore_second_deps', 'checkBox', v=True):
+    if renderer == 'renderman':
+      generator = itertools.chain(generator, renderman.generate_second_order_dependency_paths())
+    elif renderer == 'redshift':
+      generator = itertools.chain(generator, generate_redshift_second_order_dependency_paths(frames_to_render))
+
+  # Generate xgen paths
+  generator = itertools.chain(generator, generate_xgen_paths())
+  return list(generator)
+
+
+def generate_asset_paths(frames_to_render):
   """Returns all of the files being used by the scene"""
   file_types = {
     'file': _file_handler,
@@ -690,8 +782,6 @@ def get_scene_files(frames_to_render, renderer):
     'MASH_Audio': _mashAudio_handler,
     'bifrostContainer': functools.partial(_bifrost_handler, frames_to_render),
   }
-
-  # Handles direct dependencies
   for file_type in file_types:
     handler = file_types.get(file_type)
     nodes = cmds.ls(type=file_type)
@@ -702,12 +792,8 @@ def get_scene_files(frames_to_render, renderer):
           print 'found file dependency from %s node %s: %s' % (file_type, node, scene_file)
           yield scene_file
 
-  # Handles recursive dependencies
-  if not eval_ui('ignore_second_deps', 'checkBox', v=True):
-    if renderer == 'renderman':
-      for file in renderman.parse_rib_archives():
-        yield file
 
+def generate_xgen_paths():
   try:
     for xgen_file in get_xgen_files():
       yield xgen_file
@@ -939,7 +1025,15 @@ def collect_layer_info(layer, renderer):
     for r_pass in pass_list:
       if cmds.getAttr('%s.enabled' % (r_pass,)) == True:
         layer_info['render_passes'].append(r_pass)
-
+  elif renderer == 'redshift':
+    for options_node in cmds.ls(type='RedshiftOptions'):
+      for attr in REDSHIFT_CACHE_ATTRIBUTES:
+        node_attr = '{0}.{1}'.format(options_node, attr)
+        layer_info[node_attr] = cmds.getAttr(node_attr)
+    for options_node in cmds.ls(type='RedshiftPostEffects'):
+      for attr in REDSHIFT_OCIO_ATTRIBUTES:
+        node_attr = '{0}.{1}'.format(options_node, attr)
+        layer_info[node_attr] = cmds.getAttr(node_attr)
   try:
     layer_info['prefix'] = cmds.getAttr(NamePrefixAttributes.get_prefix(renderer))
   except Exception:
@@ -980,6 +1074,7 @@ def get_maya_version():
   if version_rounded.is_integer():
     version_rounded = int(version_rounded)
   return str(version_rounded)
+
 
 def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_render):
   """Returns scene info for the current scene.
@@ -1093,6 +1188,9 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
     else:
       scene_info['extension'] = renderman.get_extension()
     scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
+  elif renderer == 'redshift':
+    scene_info['extension'] = cmds.getAttr('defaultRenderGlobals.imfPluginKey')
+    scene_info['padding'] = int(cmds.getAttr('defaultRenderGlobals.extensionPadding'))
   scene_info['extension'] = scene_info['extension'][:3]
 
   # collect a dict of attrs that define how output frames have frame numbers
@@ -1124,10 +1222,14 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
   scene_info['file_prefix'].append(layer_prefixes)
 
   print '--> files'
-  scene_info['files'] = list(set(get_scene_files(frames_to_render, renderer)))
-  for full_name in extra_assets:
-    scene_info['files'].append(full_name.replace('\\', '/'))
-  scene_info['files'] = [_absolutize_path(path) for path in scene_info['files']]
+  assets = set()
+  for asset in get_scene_files(frames_to_render, renderer):
+    if asset:
+      assets.add(_clean_path(asset))
+  for asset in extra_assets:
+    if asset:
+      assets.add(_clean_path(asset))
+  scene_info['files'] = [_clean_path(_absolutize_path(path)) for path in assets]
   # Xgen files are already included in the main files list, but we also
   # include them separately so Zync can perform Xgen-related tasks on
   # the much smaller subset
@@ -1173,9 +1275,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
       scene_info['vray_version'] = '.'.join(str(cmds.vray('version')).split('.')[0:3])
       scene_info['vray_production_engine_name'] = _get_vray_production_engine_name()
     except Exception as e:
-      raise maya_common.MayaZyncException('Could not detect Vray version. This is required '
-                              'to render Vray jobs. Do you have the Vray '
-                              'plugin loaded?')
+      raise maya_common.MayaZyncException(_plugin_load_error_message('VRay'))
 
   scene_info['arnold_version'] = ''
   if renderer == 'arnold':
@@ -1183,18 +1283,20 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
     try:
       scene_info['arnold_version'] = str(cmds.pluginInfo('mtoa', query=True, version=True))
     except Exception as e:
-      raise maya_common.MayaZyncException('Could not detect Arnold version. This is '
-                              'required to render Arnold jobs. Do you have the '
-                              'Arnold plugin loaded?')
+      raise maya_common.MayaZyncException(_plugin_load_error_message('Arnold'))
 
   if renderer == 'renderman':
     print '--> renderman version'
     try:
       scene_info['renderman_version'] = renderman.get_version()
     except Exception as e:
-      raise maya_common.MayaZyncException('Could not detect Renderman version. This is '
-                              'required to render Renderman jobs. Do you have '
-                              'the Renderman plugin loaded?')
+      raise maya_common.MayaZyncException(_plugin_load_error_message('Renderman'))
+
+  if renderer == 'redshift':
+    try:
+      scene_info['redshift_version'] = get_redshift_version()
+    except Exception as e:
+      raise maya_common.MayaZyncException(_plugin_load_error_message('Redshift'))
 
   if renderer == 'arnold':
     _check_arnold_gpu()
@@ -1210,6 +1312,7 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
     except:
       aov_on = False
       override_prefix = ''
+    should_override_prefix = bool(override_prefix)
     if aov_on:
       print '--> AOVs'
       scene_info['aovs'] = [cmds.getAttr('%s.name' % (n,)) for n in cmds.ls(type='aiAOV')]
@@ -1225,8 +1328,8 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
             output_prefix_aov_warning = True
 
         SubmissionCheck(
-            check=lambda: (output_prefix_aov_warning and not override_prefix) or \
-                          (override_prefix and '<RenderPass>' not in override_prefix),
+            check=lambda: (output_prefix_aov_warning and not should_override_prefix) or \
+                          (should_override_prefix and '<RenderPass>' not in override_prefix),
             title='RenderPass tag missing',
             message='AOVs are selected to render into separate files, but the '
                     'output prefix of one of the layers does not contain '
@@ -1248,6 +1351,18 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
 
   return scene_info
 
+
+def _clean_path(path):
+  return path.replace('\\', '/')
+
+
+def _plugin_load_error_message(plugin_name):
+  message = 'Could not detect {0} version. ' \
+            'This is required to render {0} jobs. ' \
+            'Do you have the {0} plugin loaded?'
+  return message.format(plugin_name)
+
+
 def _check_arnold_gpu():
   try:
     renderDevice = cmds.getAttr('defaultArnoldRenderOptions.renderDevice')
@@ -1262,10 +1377,17 @@ def _check_arnold_gpu():
               'Please change render device to CPU in render settings.',
   ).run_check()
 
+
 def _absolutize_path(path):
-  if os.path.isabs(path):
-    return path
-  return os.path.abspath(os.path.join(eval_ui('project', text=True), path))
+  if path:
+    # Maya sometimes prefixes relative paths with //, but abspath considers
+    # such paths as absolute, so // needs to be removed
+    if path.startswith('//'):
+      path = path.replace('//', '', 1)
+    if not os.path.isabs(path):
+      return os.path.abspath(os.path.join(proj_dir(), path))
+  return path
+
 
 def _get_bake_set_uvs(bake_set):
   conn_list = cmds.listConnections(bake_set)
@@ -1515,7 +1637,7 @@ class SubmitWindow(object):
     self.vray_nightly = 0
     self.use_standalone = 0
     self.ignore_second_deps = 0
-    self.distributed = 0
+    self.num_tiles = 1
     self.ignore_plugin_errors = 0
     self.login_type = 'zync'
 
@@ -1531,6 +1653,7 @@ class SubmitWindow(object):
     self.parse_renderer_from_scene()
     self.init_layers()
     self.init_bake()
+    self.init_tiled_rendering()
 
     self.name = self.loadUI(UI_FILE)
 
@@ -1589,7 +1712,11 @@ class SubmitWindow(object):
     cmds.checkBox('upload_only', e=True, changeCommand=self.upload_only_toggle)
     cmds.optionMenu('renderer', e=True, changeCommand=self.change_renderer)
     cmds.optionMenu('job_type', e=True, changeCommand=self.change_job_type)
-    cmds.checkBox('distributed', e=True, changeCommand=self.distributed_toggle)
+    if self.tiled_rendering_enabled:
+      cmds.textField('num_tiles', e=True, changeCommand=self.change_num_tiles)
+    else:
+      cmds.textField('num_tiles', e=True, vis=False)
+      cmds.text('label_num_tiles', e=True, vis=False)
     cmds.checkBox('sync_extra_assets', e=True, changeCommand=self.sync_extra_assets_toggle)
     cmds.button('select_files', e=True, enable=False)
     cmds.textScrollList('layers', e=True, selectCommand=self.change_layers)
@@ -1613,7 +1740,6 @@ class SubmitWindow(object):
       cmds.textField('num_instances', e=True, en=False)
       cmds.optionMenu('instance_type', e=True, en=False)
       cmds.checkBox('skip_check', e=True, en=False)
-      cmds.checkBox('distributed', e=True, en=False)
       cmds.textField('output_dir', e=True, en=False)
       cmds.optionMenu('renderer', e=True, en=False)
       cmds.optionMenu('job_type', e=True, en=False)
@@ -1635,23 +1761,12 @@ class SubmitWindow(object):
       cmds.optionMenu('job_type', e=True, en=True)
       cmds.textField('frange', e=True, en=True)
       cmds.textField('frame_step', e=True, en=True)
-      cmds.textField('chunk_size', e=True, en=True)
+      cmds.textField('chunk_size', e=True, en=True, changeCommand=self.change_chunk_size)
       cmds.optionMenu('camera', e=True, en=True)
       cmds.textScrollList('layers', e=True, en=True)
       cmds.textField('x_res', e=True, en=True)
       cmds.textField('y_res', e=True, en=True)
       self.change_renderer(eval_ui('renderer', ui_type='optionMenu', v=True))
-
-  @show_exceptions
-  def distributed_toggle(self, checked):
-    """Event triggered when the Distributed Rendering control
-    is toggled.
-
-    Args:
-      checked: bool, whether the checkbox is checked
-    """
-    # if DR is on use of standalone is required
-    cmds.checkBox('use_standalone', e=True, en=not checked, value=checked)
 
   @show_exceptions
   def sync_extra_assets_toggle(self, checked):
@@ -1669,6 +1784,16 @@ class SubmitWindow(object):
     self.update_est_cost()
 
   @show_exceptions
+  def change_num_tiles(self, num_tiles):
+    if int(num_tiles) > 1:
+      cmds.textField('chunk_size', e=True, tx='1')
+
+  @show_exceptions
+  def change_chunk_size(self, chunk_size):
+    if int(chunk_size) > 1 and self.tiled_rendering_enabled:
+      cmds.textField('num_tiles', e=True, tx='1')
+
+  @show_exceptions
   def change_instance_type(self, *args, **kwargs):
     _unused(args)
     _unused(kwargs)
@@ -1676,36 +1801,46 @@ class SubmitWindow(object):
 
   @show_exceptions
   def change_renderer(self, renderer):
+    cmds.checkBox('vray_nightly', e=True, en=False)
+    cmds.checkBox('vray_nightly', e=True, vis=False)
+    cmds.checkBox('vray_nightly', e=True, v=False)
     if renderer in ('vray', 'V-Ray'):
       renderer_key = 'vray'
-      cmds.checkBox('vray_nightly', e=True, en=True)
-      cmds.checkBox('distributed', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Vray Standalone')
+      cmds.checkBox('use_standalone', e=True, vis=True)
       cmds.checkBox('ignore_second_deps', e=True, vis=False)
+      cmds.textField('num_tiles', e=True, en=False)
     elif renderer.lower() == 'arnold':
       renderer_key = 'arnold'
-      cmds.checkBox('vray_nightly', e=True, en=False)
-      cmds.checkBox('distributed', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, en=True)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, label='Use Arnold Standalone')
+      cmds.checkBox('use_standalone', e=True, vis=True)
       cmds.checkBox('ignore_second_deps', e=True, vis=False)
+      cmds.textField('num_tiles', e=True, en=False)
+      cmds.textField('num_tiles', e=True, tx='1')
     elif renderer.lower() == 'renderman':
       renderer_key = 'renderman'
-      cmds.checkBox('vray_nightly', e=True, en=False)
-      cmds.checkBox('distributed', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, v=False)
       cmds.checkBox('use_standalone', e=True, en=False)
       cmds.checkBox('use_standalone', e=True, label='Use Standalone')
-      cmds.checkBox('use_standalone', e=True, label='Use Standalone')
+      cmds.checkBox('use_standalone', e=True, vis=True)
       cmds.checkBox('ignore_second_deps', e=True, vis=True)
+      cmds.textField('num_tiles', e=True, en=False)
+      cmds.textField('num_tiles', e=True, tx='1')
+    elif renderer.lower() == 'redshift':
+      renderer_key = 'redshift'
+      cmds.checkBox('use_standalone', e=True, vis=False)
+      cmds.checkBox('use_standalone', e=True, en=False)
+      cmds.checkBox('use_standalone', e=True, v=False)
+      cmds.checkBox('ignore_second_deps', e=True, vis=True)
+      cmds.textField('num_tiles', e=True, en=False)
+      cmds.textField('num_tiles', e=True, tx='1')
     else:
       raise maya_common.MayaZyncException('Unrecognized renderer "%s".' % renderer)
-    cmds.checkBox('vray_nightly', e=True, v=False)
-    cmds.checkBox('distributed', e=True, v=False)
-    cmds.textField('chunk_size', e=True, en=True)
+    cmds.textField('chunk_size', e=True, en=True, changeCommand=self.change_chunk_size)
     cmds.textField('chunk_size', e=True, tx='10')
 
     #  job_types dropdown - remove all items for list, then allow in job types
@@ -1795,6 +1930,11 @@ class SubmitWindow(object):
     else:
       cmds.textField('chunk_size', e=True, en=True)
 
+    if current_renderer in ('vray', 'v-ray') and checked:
+      cmds.textField('num_tiles', e=True, en=True)
+    else:
+      cmds.textField('num_tiles', e=True, en=False)
+
   @show_exceptions
   def select_new_project(self, selected):
     if selected:
@@ -1862,6 +2002,7 @@ class SubmitWindow(object):
 
     params['priority'] = int(eval_ui('priority', text=True))
     params['num_instances'] = int(eval_ui('num_instances', text=True))
+    params['num_tiles'] = int(eval_ui('num_tiles', text=True))
 
     selected_type = self.zync_conn.machine_type_from_label(
         eval_ui('instance_type', 'optionMenu', v=True), params['renderer'] + '-maya')
@@ -1886,18 +2027,12 @@ class SubmitWindow(object):
       params['vray_nightly'] = int(eval_ui('vray_nightly', 'checkBox', v=True))
       if params['use_standalone'] == 1 and params['job_subtype'] == 'bake':
         cmds.error('Vray Standalone is not currently supported for Bake jobs.')
-      params['distributed'] = int(eval_ui('distributed', 'checkBox', v=True))
-      if params['distributed'] == 1 and params['job_subtype'] == 'bake':
-        cmds.error('Distributed Rendering is not currently supported for Bake jobs.')
     elif params['upload_only'] == 0 and params['renderer'] == 'mr':
       params['vray_nightly'] = 0
-      params['distributed'] = 0
     elif params['upload_only'] == 0 and params['renderer'] == 'arnold':
       params['vray_nightly'] = 0
-      params['distributed'] = 0
     else:
       params['vray_nightly'] = 0
-      params['distributed'] = 0
 
     if params['upload_only'] == 1:
       params['layers'] = None
@@ -1916,9 +2051,6 @@ class SubmitWindow(object):
       layers = ','.join(layers)
       params['layers'] = layers
       params['bake_sets'] = None
-
-    if params['distributed'] and 'PREEMPTIBLE' in selected_type:
-      raise maya_common.MayaZyncException('Distributed rendering jobs cannot use preemptible instances.')
 
     return params
 
@@ -1943,6 +2075,9 @@ class SubmitWindow(object):
       if bake_set != 'vrayDefaultBakeOptions')
     self.bake_sets = list(self.bake_sets)
     self.bake_sets.sort()
+
+  def init_tiled_rendering(self):
+    self.tiled_rendering_enabled = self.zync_conn.is_experiment_enabled("EXPERIMENT_TILED_RENDERING")
 
   #
   #  These init_* functions get run automatcially when the UI file is loaded.
@@ -1985,8 +2120,12 @@ class SubmitWindow(object):
     self.update_est_cost()
 
   def refresh_instance_types_cache(self):
-    usage_tag = 'maya_vray_rt' if self.renderer == 'vray' and \
-        self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA else None
+    usage_tag = None
+    if self.renderer == 'vray':
+      if self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
+        usage_tag = 'maya_vray_rt'
+    elif self.renderer == 'redshift':
+      usage_tag = 'maya_redshift'
     self.zync_conn.refresh_instance_types_cache(renderer=self.renderer, usage_tag=usage_tag)
 
   def parse_renderer_from_scene(self):
@@ -2002,6 +2141,8 @@ class SubmitWindow(object):
     # handle 'renderman', renderMan' and 'renderManRIS'
     elif current_renderer.lower().startswith('renderman'):
       key = 'renderman'
+    elif current_renderer == 'redshift':
+      key = 'redshift'
     else:
       key = 'vray'
     # if that renderer is not supported, default to Vray
@@ -2014,13 +2155,13 @@ class SubmitWindow(object):
   def init_renderer(self):
     #  Add the list of renderers to UI element.
     rend_found = False
-    default_renderer_name = self.zync_conn.MAYA_RENDERERS.get(self.renderer, 'vray')
+    default_renderer_name = RENDERER_NAMES.get(self.renderer, 'vray')
 
     if self.vray_production_engine_name == VRAY_ENGINE_NAME_CUDA:
       cmds.menuItem(parent='renderer', label=RENDER_LABEL_VRAY_CUDA)
       cmds.optionMenu('renderer', e=True, v=RENDER_LABEL_VRAY_CUDA, enable=False)
     else:
-      for item in self.zync_conn.MAYA_RENDERERS.values():
+      for item in RENDERER_NAMES.values():
         cmds.menuItem(parent='renderer', label=item)
         if item == default_renderer_name:
           rend_found = True
@@ -2084,7 +2225,7 @@ class SubmitWindow(object):
       able to identify the one selected.
     """
     selected_renderer_label = eval_ui('renderer', ui_type='optionMenu', v=True)
-    for renderer, renderer_label in self.zync_conn.MAYA_RENDERERS.iteritems():
+    for renderer, renderer_label in RENDERER_NAMES.iteritems():
       if renderer_label == selected_renderer_label:
         return renderer
     if selected_renderer_label == RENDER_LABEL_VRAY_CUDA:

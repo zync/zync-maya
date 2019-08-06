@@ -209,7 +209,6 @@ class Renderman(object):
     for expandedPath in self.generate_files_from_tokenized_path(filename):
       yield expandedPath
 
-
   def pxrTexture_handler(self, node):
     """Handles PxrTexture nodes"""
     filename = cmds.getAttr('%s.filename' % node)
@@ -217,7 +216,6 @@ class Renderman(object):
       filename = re.sub('_MAPID_', '*', filename)
     for expandedPath in self.generate_files_from_tokenized_path(filename):
       yield expandedPath
-
 
   def pxrMultiTexture_handler(self, node):
     """Handles PxrMultiTexture nodes"""
@@ -227,7 +225,6 @@ class Renderman(object):
         for expandedPath in self.generate_files_from_tokenized_path(filename):
           yield expandedPath
 
-
   def pxrDomeLight_handler(self, node):
     """Handles PxrDomeLight nodes since Renderman 21"""
     filename = cmds.getAttr('%s.lightColorMap' % node)
@@ -235,21 +232,22 @@ class Renderman(object):
       for expandedPath in self.generate_files_from_tokenized_path(filename):
           yield expandedPath
 
-
   def rmsEnvLight_handler(self, node):
     """Handles RMSEnvLight nodes"""
     filename = cmds.getAttr('%s.rman__EnvMap' % node)
     for expandedPath in self.generate_files_from_tokenized_path(filename):
       yield expandedPath
 
-
   def pxrPtexture_handler(self, node):
     filename = cmds.getAttr('%s.filename' % node)
     for expandedPath in self.generate_files_from_tokenized_path(filename):
       yield expandedPath
 
-
   def pxrNormalMap_handler(self, node):
     filename = cmds.getAttr('%s.filename' % node)
     for expandedPath in self.generate_files_from_tokenized_path(filename):
       yield expandedPath
+
+  def generate_second_order_dependency_paths(self):
+    for file in self.parse_rib_archives():
+      yield file

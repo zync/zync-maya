@@ -197,6 +197,23 @@ class TestMaya(unittest.TestCase):
     expected = 'camera_scene_layer'
     self.assertEqual(zync_maya.replace_tokens_in_file_prefix(input, scene_name, layer, camera), expected)
 
+  def test_replace_frame_number(self):
+    test_input = "text_without_tokens.png"
+    expected = "text_without_tokens.png"
+    self.assertEqual(zync_maya.replace_frame_number(test_input, 123), expected)
+
+    test_input = "test_#_path_##_with_###_multiple_####_tokens"
+    expected = "test_123_path_123_with_123_multiple_0123_tokens"
+    self.assertEqual(zync_maya.replace_frame_number(test_input, 123), expected)
+
+    test_input = "test_#_with_##_all_###_zeroes_########"
+    expected = "test_0_with_00_all_000_zeroes_00000000"
+    self.assertEqual(zync_maya.replace_frame_number(test_input, 0), expected)
+
+    test_input = "test"
+    with self.assertRaises(ValueError) as _:
+      zync_maya.replace_frame_number(test_input, -1)
+
 
 def _unicode_to_str(input_obj):
   """Returns a version of the input with all unicode replaced by standard
