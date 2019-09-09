@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.5.3'
+__version__ = '1.5.5'
 
 
 import base64
@@ -1339,6 +1339,20 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
     else:
       scene_info['aovs'] = []
 
+  if renderer == 'vray':
+    print '--> bake GI flag'
+    scene_info['bake_gi'] = False;
+    try:
+      if cmds.getAttr('vraySettings.gi'):
+        primary_engine = int(cmds.getAttr('vraySettings.pe'))
+        secondary_engine = int(cmds.getAttr('vraySettings.se'))
+        _NONE_RENDERER_ID = 0
+        _BRUTE_FORCE_RENDERER_ID = 2
+        scene_info['bake_gi'] = primary_engine != _BRUTE_FORCE_RENDERER_ID or \
+                                (secondary_engine != _NONE_RENDERER_ID and secondary_engine != _BRUTE_FORCE_RENDERER_ID)
+    except:
+      pass
+
   # collect info on whether scene uses Legacy Render Layers or new Render
   # Setup system (Maya 2016.5 and higher only)
   if float(get_maya_version()) >= 2016.5:
@@ -1922,7 +1936,7 @@ class SubmitWindow(object):
     Args:
       checked: bool, whether the checkbox is checked
     """
-    current_renderer = eval_ui('renderer', ui_type='optionMenu', v=True).lower()
+    current_renderer = self.get_renderer()
     # if using arnold standalone, disable chunk size. arnold stores info
     # one-frame-per-file so chunk size is not applicable.
     if current_renderer == 'arnold' and checked:
@@ -1930,7 +1944,7 @@ class SubmitWindow(object):
     else:
       cmds.textField('chunk_size', e=True, en=True)
 
-    if current_renderer in ('vray', 'v-ray') and checked:
+    if current_renderer == 'vray' and checked:
       cmds.textField('num_tiles', e=True, en=True)
     else:
       cmds.textField('num_tiles', e=True, en=False)
