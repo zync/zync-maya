@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.5.5'
+__version__ = '1.5.7'
 
 
 import base64
@@ -667,7 +667,13 @@ def generate_redshift_asset_paths():
     yield path
 
   for path in generate_redshift_layer_overriden_paths('RedshiftPostEffects', REDSHIFT_OCIO_ATTRIBUTES):
-    yield path
+    if path:
+      # OCIO files
+      if path.lower().endswith('.ocio'):
+        for ocio_file in zync.get_ocio_files(path):
+          yield ocio_file
+      else:
+        yield path
 
 
 def generate_redshift_layer_overriden_paths(node_type, attributes):
@@ -735,6 +741,9 @@ def get_scene_files(frames_to_render, renderer):
 
   # Generate xgen paths
   generator = itertools.chain(generator, generate_xgen_paths())
+
+  # Handle OCIO dependencies
+  generator = itertools.chain(generator, generate_ocio_files())
   return list(generator)
 
 
@@ -782,6 +791,7 @@ def generate_asset_paths(frames_to_render):
     'MASH_Audio': _mashAudio_handler,
     'bifrostContainer': functools.partial(_bifrost_handler, frames_to_render),
   }
+
   for file_type in file_types:
     handler = file_types.get(file_type)
     nodes = cmds.ls(type=file_type)
@@ -986,6 +996,13 @@ def _find_matching_paren(some_string, opening_paren):
       else:
         current_open_parens -= 1
   return None
+
+
+def generate_ocio_files():
+  """ Yields external OCIO config file and its dependencies, if enabled. """
+  if cmds.colorManagementPrefs(q=True,  cmEnabled=True) and cmds.colorManagementPrefs(q=True, cmConfigFileEnabled=True):
+    for ocio_file in zync.get_ocio_files(str(cmds.colorManagementPrefs(q=True,  configFilePath=True))):
+      yield ocio_file
 
 
 def get_default_extension(renderer):
@@ -1834,7 +1851,6 @@ class SubmitWindow(object):
       cmds.checkBox('use_standalone', e=True, vis=True)
       cmds.checkBox('ignore_second_deps', e=True, vis=False)
       cmds.textField('num_tiles', e=True, en=False)
-      cmds.textField('num_tiles', e=True, tx='1')
     elif renderer.lower() == 'renderman':
       renderer_key = 'renderman'
       cmds.checkBox('use_standalone', e=True, v=False)
@@ -1855,7 +1871,6 @@ class SubmitWindow(object):
     else:
       raise maya_common.MayaZyncException('Unrecognized renderer "%s".' % renderer)
     cmds.textField('chunk_size', e=True, en=True, changeCommand=self.change_chunk_size)
-    cmds.textField('chunk_size', e=True, tx='10')
 
     #  job_types dropdown - remove all items for list, then allow in job types
     #  from self.zync_conn.JOB_SUBTYPES
@@ -1895,6 +1910,8 @@ class SubmitWindow(object):
       cmds.text('layers_label', e=True, label='Render Layers:')
       cmds.textScrollList('layers', e=True, removeAll=True)
       cmds.textScrollList('layers', e=True, append=self.layers)
+      if len(self.layers) == 1:
+        cmds.textScrollList('layers', e=True, selectIndexedItem=1)
       cmds.textField('x_res', e=True, tx=self.x_res)
       cmds.textField('y_res', e=True, tx=self.y_res)
     elif job_type == 'bake':
@@ -1944,7 +1961,7 @@ class SubmitWindow(object):
     else:
       cmds.textField('chunk_size', e=True, en=True)
 
-    if current_renderer == 'vray' and checked:
+    if (current_renderer == 'vray' or current_renderer == 'arnold') and checked:
       cmds.textField('num_tiles', e=True, en=True)
     else:
       cmds.textField('num_tiles', e=True, en=False)
