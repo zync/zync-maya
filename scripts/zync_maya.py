@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.5.7'
+__version__ = '1.5.8'
 
 
 import base64
@@ -693,7 +693,7 @@ def generate_redshift_second_order_dependency_paths(frame_numbers):
       proxy_paths = [proxy_path]
     for path in proxy_paths:
       for proxy_asset in maya.mel.eval('rsProxy -q -dependencies "%s"' % path):
-        yield _clean_path(proxy_asset)
+        yield _clean_path(seq_to_glob(proxy_asset))
 
 
 def replace_frame_number(path, frame_number):
