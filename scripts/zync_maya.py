@@ -14,7 +14,7 @@ Usage:
 
 """
 
-__version__ = '1.5.8'
+__version__ = '1.5.13'
 
 
 import base64
@@ -1353,22 +1353,21 @@ def get_scene_info(renderer, layers_to_render, is_bake, extra_assets, frames_to_
                     '<RenderPass> tag. Are you sure the configuration is correct?',
         ).run_check()
 
+        output_prefix_layer_warning = False
+        for output in prefixes_to_verify:
+          if not output or '<RenderLayer>' not in output:
+            output_prefix_layer_warning = True
+
+        SubmissionCheck(
+            check=lambda: (output_prefix_layer_warning and not should_override_prefix) or \
+                          (should_override_prefix and '<RenderLayer>' not in override_prefix),
+            title='RenderLayer tag missing',
+            message='Tag <RenderLayer> is required in output if AOVs are present. '
+                    'Are you sure the configuration is correct?',
+        ).run_check()
+
     else:
       scene_info['aovs'] = []
-
-  if renderer == 'vray':
-    print '--> bake GI flag'
-    scene_info['bake_gi'] = False;
-    try:
-      if cmds.getAttr('vraySettings.gi'):
-        primary_engine = int(cmds.getAttr('vraySettings.pe'))
-        secondary_engine = int(cmds.getAttr('vraySettings.se'))
-        _NONE_RENDERER_ID = 0
-        _BRUTE_FORCE_RENDERER_ID = 2
-        scene_info['bake_gi'] = primary_engine != _BRUTE_FORCE_RENDERER_ID or \
-                                (secondary_engine != _NONE_RENDERER_ID and secondary_engine != _BRUTE_FORCE_RENDERER_ID)
-    except:
-      pass
 
   # collect info on whether scene uses Legacy Render Layers or new Render
   # Setup system (Maya 2016.5 and higher only)
@@ -1639,7 +1638,7 @@ class SubmitWindow(object):
 
     scene_name = cmds.file(q=True, loc=True)
     if scene_name == 'unknown':
-      raise maya_common.MayaZyncException('Please save your script before launching a job.')
+      raise maya_common.MayaZyncException('Please save your scene before launching a job.')
 
     # this will perform the Google OAuth flow so future API requests
     # will be authenticated
@@ -1684,7 +1683,6 @@ class SubmitWindow(object):
     self.parse_renderer_from_scene()
     self.init_layers()
     self.init_bake()
-    self.init_tiled_rendering()
 
     self.name = self.loadUI(UI_FILE)
 
@@ -1743,11 +1741,7 @@ class SubmitWindow(object):
     cmds.checkBox('upload_only', e=True, changeCommand=self.upload_only_toggle)
     cmds.optionMenu('renderer', e=True, changeCommand=self.change_renderer)
     cmds.optionMenu('job_type', e=True, changeCommand=self.change_job_type)
-    if self.tiled_rendering_enabled:
-      cmds.textField('num_tiles', e=True, changeCommand=self.change_num_tiles)
-    else:
-      cmds.textField('num_tiles', e=True, vis=False)
-      cmds.text('label_num_tiles', e=True, vis=False)
+    cmds.textField('num_tiles', e=True, changeCommand=self.change_num_tiles)
     cmds.checkBox('sync_extra_assets', e=True, changeCommand=self.sync_extra_assets_toggle)
     cmds.button('select_files', e=True, enable=False)
     cmds.textScrollList('layers', e=True, selectCommand=self.change_layers)
@@ -1821,7 +1815,7 @@ class SubmitWindow(object):
 
   @show_exceptions
   def change_chunk_size(self, chunk_size):
-    if int(chunk_size) > 1 and self.tiled_rendering_enabled:
+    if int(chunk_size) > 1:
       cmds.textField('num_tiles', e=True, tx='1')
 
   @show_exceptions
@@ -2106,9 +2100,6 @@ class SubmitWindow(object):
       if bake_set != 'vrayDefaultBakeOptions')
     self.bake_sets = list(self.bake_sets)
     self.bake_sets.sort()
-
-  def init_tiled_rendering(self):
-    self.tiled_rendering_enabled = self.zync_conn.is_experiment_enabled("EXPERIMENT_TILED_RENDERING")
 
   #
   #  These init_* functions get run automatcially when the UI file is loaded.
@@ -2551,6 +2542,20 @@ class SubmitWindow(object):
 
     render_params = copy.deepcopy(params)
 
+    print '--> bake GI flag'
+    render_params['scene_info']['bake_gi'] = False
+    try:
+      if cmds.getAttr('vraySettings.gi'):
+        primary_engine = int(cmds.getAttr('vraySettings.pe'))
+        secondary_engine = int(cmds.getAttr('vraySettings.se'))
+        _NONE_RENDERER_ID = 0
+        _BRUTE_FORCE_RENDERER_ID = 2
+        render_params['scene_info']['bake_gi'] = primary_engine != _BRUTE_FORCE_RENDERER_ID or \
+                                (secondary_engine != _NONE_RENDERER_ID and secondary_engine != _BRUTE_FORCE_RENDERER_ID)
+    except:
+        pass
+
+    render_params['scene_info']['render_layers'] = [layer]
     render_params['project_dir'] = params['project']
     render_params['output_dir'] = params['out_path']
     render_params['use_nightly'] = params['vray_nightly']
@@ -2669,6 +2674,11 @@ class SubmitWindow(object):
     cmds.undoInfo(openChunk=True)
 
     _switch_to_renderlayer(layer)
+
+    # We need to remove 'rs_' prefix from layer name,
+    # as it is removed by Arnold during standalone rendering.
+    if layer.startswith('rs_'):
+      layer = layer[3:]
 
     scene_path = cmds.file(q=True, loc=True)
     scene_head, extension = os.path.splitext(scene_path)
