@@ -1,5 +1,7 @@
 # Zync Plugin for Autodesk's Maya
 
+**Notice:** this project has been archived and is no longer being maintained.
+
 For a list of Maya versions supported on Zync please see [our main website](https://www.zyncrender.com/#about). You can find additional info in [our documentation](https://docs.zyncrender.com/faq#q-what-applicationrendererplugin-versions-do-you-support).
 
 ## zync-python
